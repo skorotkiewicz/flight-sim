@@ -20,7 +20,10 @@ test("touch gear stays outside the radio, minimap, and throttle hit areas", () =
 		assert.ok(gear, "a gear control exists");
 		const radioRight = width / 2 + Math.min(430, width - 150) / 2;
 		assert.ok(gear.x - gear.r > radioRight, `${width}: gear clears radio`);
-		assert.ok(gear.y - gear.r > 120, `${width}: gear clears minimap`);
+		assert.ok(
+			gear.y - gear.r - 10 * layout.u > 154,
+			`${width}: gear clears minimap`,
+		);
 		assert.ok(
 			gear.y + gear.r + 20 * layout.u <= layout.lever.y,
 			`${width}: padded gear/lever separation`,

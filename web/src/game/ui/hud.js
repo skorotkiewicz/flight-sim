@@ -811,7 +811,12 @@ var Hud = class {
 			n.fillText(`GEAR`, b.gear.x + offset, b.gear.y + offset - i * 4);
 			n.fillStyle = held ? `#fff` : gearStatusColor(gearStatus);
 			n.font = a(10);
-			n.fillText(gearStatus, b.gear.x + offset, b.gear.y + offset + i * 11);
+			n.fillText(
+				gearStatus,
+				b.gear.x + offset,
+				b.gear.y + offset + i * 11,
+				b.gear.r * 1.7,
+			);
 			n.textAlign = `left`;
 		}
 		this.touchButton(b.flapsLess, `FLAP −`, t.held(`flapsLess`), a(11));

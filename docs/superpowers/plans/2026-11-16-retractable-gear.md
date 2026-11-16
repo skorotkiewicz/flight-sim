@@ -29,19 +29,19 @@
 
 ## Tasks
 
-- [ ] Physics: add pure gear helpers and meaningful tests first; wire simulation
+- [x] Physics: add pure gear helpers and meaningful tests first; wire simulation
   travel, effective drag, locked-wheel support and belly contact into flight.js.
   Add gear-up touchdown data and preserve on-ground/air-time behavior.
-- [ ] Visual/model: add retractable metadata and drag constants in buildFlightSpec;
+- [x] Visual/model: add retractable metadata and drag constants in buildFlightSpec;
   separate wheel/strut groups for turboprop/jet, animate/reverse/hide by actual
   extension, keep fixed biplane, pass gear state and test geometry/cleanup.
-- [ ] HUD/docs: show actual status and low-approach warning; draw a guarded touch
+- [x] HUD/docs: show actual status and low-approach warning; draw a guarded touch
   gear button; update controls in index.html and the short player README.
-- [ ] Root integration: G/touch toggle, per-flight reset, touch-layout hit testing,
+- [x] Root integration: G/touch toggle, per-flight reset, touch-layout hit testing,
   ATC warning/cooldown, belly landing result grading, and independent UI input.
-- [ ] Verify full tests, lint/build, and browser checks for fixed biplane,
+- [x] Verify full tests, lint/build, and browser checks for fixed biplane,
   ground lock, airborne travel/reversal, drag, restart/pause, and a touch toggle.
-- [ ] Review and fix important integration defects; record final evidence here.
+- [x] Review and fix important integration defects; record final evidence here.
 
 ## Execution record
 
@@ -49,3 +49,25 @@ Work stays in the user's current feature checkout. Agents own disjoint files;
 the root integrates after shared physics changes are complete. No merge, push,
 or publish is requested. Checks cover real force integration and contact events,
 not just visibility changes or helper return values.
+
+
+## Final verification
+
+- All 58 Node tests pass, including force-integrated drag, wheel and belly
+  support, slow surviving skids for both aircraft, visual geometry and disposal,
+  ATC warning cooldowns, and guarded touch input.
+- Biome lint and the Vite production build pass. Existing notices remain for
+  the installed Biome schema version and the Three.js chunk size.
+- Scripted Chromium checks pass for native G input, ground lock, three-second
+  movement, mid-travel reversal, hidden fully retracted assemblies, pause,
+  restart, and fixed biplane behavior. Tests stage aircraft positions through
+  the debug hook and run the real game simulation.
+- Native touch checks pass at 844x390, 568x320, and 390x844 without activating
+  the flight stick. Screenshot inspection caught a minimap overlap; the gear
+  button now clears the minimap including hit padding, and status text fits
+  within its circle. The regression test failed before this correction and
+  passes afterward.
+- A staged surviving gear-up landing reaches the normal ending/debrief flow
+  with a D grade and an explicit gear-up landing result.
+- Browser checks reported no runtime exceptions. Independent final review
+  found no important correctness defects.

@@ -486,7 +486,7 @@ function createTouchControlLayout(e, t, n) {
 	let a = r * 46;
 	let o = e - n.r - r * 14 - a;
 	// Reserve room below the minimap for gear, clear of the ATC radio panel.
-	let s = Math.max(n.t + 120 + r * 78, t * 0.3);
+	let s = Math.max(n.t + 154 + r * 78, t * 0.3);
 	let c = {
 		x: o,
 		y: s,
@@ -495,7 +495,7 @@ function createTouchControlLayout(e, t, n) {
 	};
 	let gearButton = {
 		x: c.x + c.w / 2,
-		y: n.t + 120 + r * 35,
+		y: n.t + 154 + r * 35,
 		r: r * 23,
 	};
 	let l = r * 34;
