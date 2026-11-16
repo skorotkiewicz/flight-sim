@@ -29,59 +29,59 @@ All game code lives in `web/src/game/`, grouped:
 
 **`core/`** — rendering infrastructure
 
-| module | role |
-|---|---|
-| three.js | re-export shim of the npm `three` package (r187); the embedded three r170 body was dropped |
-| postfx.js | FXAA + render-target composer |
+| module    | role                                                                                       |
+| --------- | ------------------------------------------------------------------------------------------ |
+| three.js  | re-export shim of the npm `three` package (r187); the embedded three r170 body was dropped |
+| postfx.js | FXAA + render-target composer                                                              |
 
 **`flight/`** — flying the plane
 
-| module | role |
-|---|---|
-| flight.js | aircraft spec, flap data, flight-model math |
-| input.js | touch/handheld detection, TouchInput |
+| module      | role                                              |
+| ----------- | ------------------------------------------------- |
+| flight.js   | aircraft spec, flap data, flight-model math       |
+| input.js    | touch/handheld detection, TouchInput              |
 | controls.js | DesktopInput (keyboard/mouse/gamepad), PwaManager |
-| clock.js | Assist (arcade assist), fixed-step clock |
+| clock.js    | Assist (arcade assist), fixed-step clock          |
 
 **`plane/`** — the aircraft and its effects
 
-| module | role |
-|---|---|
-| meshkit.js | makeMesh + material/gradient/texture helpers |
+| module         | role                                                 |
+| -------------- | ---------------------------------------------------- |
+| meshkit.js     | makeMesh + material/gradient/texture helpers         |
 | planemodels.js | plane styles (biplane/hard/sunflower), part builders |
-| contrails.js | wingtip contrail meshes + shader |
-| particles.js | ParticleSystem (dust/smoke) |
+| contrails.js   | wingtip contrail meshes + shader                     |
+| particles.js   | ParticleSystem (dust/smoke)                          |
 
 **`world/`** — the world you fly over
 
-| module | role |
-|---|---|
-| noise.js | simplex noise (copy of the worker's) |
-| terrain.js | Terrain (biomes, height field) |
-| props.js | scatter props |
-| destinations.js | settlements/POIs |
-| clouds.js | clouds + CameraRig |
-| sky.js | sun/lighting presets (Morning, Water, …) |
-| mission.js | cross-country route/mission logic |
+| module          | role                                     |
+| --------------- | ---------------------------------------- |
+| noise.js        | simplex noise (copy of the worker's)     |
+| terrain.js      | Terrain (biomes, height field)           |
+| props.js        | scatter props                            |
+| destinations.js | settlements/POIs                         |
+| clouds.js       | clouds + CameraRig                       |
+| sky.js          | sun/lighting presets (Morning, Water, …) |
+| mission.js      | cross-country route/mission logic        |
 
 **`ui/`** — screens and overlays
 
-| module | role |
-|---|---|
-| hud.js | HUD overlays (arrows, badges) |
-| instruments.js | canvas gauges (ASI, alt…) |
-| menus.js | SettingsPanel (pause menu) |
-| hangarui.js | Hangar customization UI |
-| worldmap.js | route-map drawing |
+| module         | role                          |
+| -------------- | ----------------------------- |
+| hud.js         | HUD overlays (arrows, badges) |
+| instruments.js | canvas gauges (ASI, alt…)     |
+| menus.js       | SettingsPanel (pause menu)    |
+| hangarui.js    | Hangar customization UI       |
+| worldmap.js    | route-map drawing             |
 
 **`app/`** — global services
 
-| module | role |
-|---|---|
-| audio.js | SoundEngine (WebAudio bus, fanfare/sfx) |
+| module     | role                                                          |
+| ---------- | ------------------------------------------------------------- |
+| audio.js   | SoundEngine (WebAudio bus, fanfare/sfx)                       |
 | storage.js | localStorage save/load (`baron.best.v1`, `baron.settings.v1`) |
-| loader.js | loadModule (dynamic import + progress) |
-| sw.js | service-worker URL helpers |
+| loader.js  | loadModule (dynamic import + progress)                        |
+| sw.js      | service-worker URL helpers                                    |
 
 **`game/main.js`** — Game class + bootstrap (`window.baron` hook is in `Game.setupDebug`); entry stub `src/main.js` imports it. lil-gui (npm dep, own chunk) is loaded by `Game.setupDebug`.
 

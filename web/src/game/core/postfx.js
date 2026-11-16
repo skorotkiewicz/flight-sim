@@ -1,41 +1,58 @@
-import { BufferGeometry, Color, DepthTexture, Float32BufferAttribute, FloatType, Mesh, OrthographicCamera, ShaderMaterial, UniformsUtils, UnsignedByteType, UnsignedIntType, Vector2, WebGLRenderTarget } from "./three.js";
+import {
+	BufferGeometry,
+	Color,
+	DepthTexture,
+	Float32BufferAttribute,
+	FloatType,
+	Mesh,
+	OrthographicCamera,
+	ShaderMaterial,
+	UniformsUtils,
+	UnsignedByteType,
+	UnsignedIntType,
+	Vector2,
+	WebGLRenderTarget,
+} from "./three.js";
 
 var Xf = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
-var fxaaMesh = new class extends BufferGeometry {
-  constructor() {
-    super();
-    this.setAttribute(`position`, new Float32BufferAttribute([-1, 3, 0, -1, -1, 0, 3, -1, 0], 3));
-    this.setAttribute(`uv`, new Float32BufferAttribute([0, 2, 0, 0, 2, 0], 2));
-  }
-}();
+var fxaaMesh = new (class extends BufferGeometry {
+	constructor() {
+		super();
+		this.setAttribute(
+			`position`,
+			new Float32BufferAttribute([-1, 3, 0, -1, -1, 0, 3, -1, 0], 3),
+		);
+		this.setAttribute(`uv`, new Float32BufferAttribute([0, 2, 0, 0, 2, 0], 2));
+	}
+})();
 var PostFX = class {
-  constructor(e) {
-    this._mesh = new Mesh(fxaaMesh, e);
-  }
-  dispose() {
-    this._mesh.geometry.dispose();
-  }
-  render(e) {
-    e.render(this._mesh, Xf);
-  }
-  get material() {
-    return this._mesh.material;
-  }
-  set material(e) {
-    this._mesh.material = e;
-  }
+	constructor(e) {
+		this._mesh = new Mesh(fxaaMesh, e);
+	}
+	dispose() {
+		this._mesh.geometry.dispose();
+	}
+	render(e) {
+		e.render(this._mesh, Xf);
+	}
+	get material() {
+		return this._mesh.material;
+	}
+	set material(e) {
+		this._mesh.material = e;
+	}
 };
 var $f = {
-  name: `FXAAShader`,
-  uniforms: {
-    tDiffuse: {
-      value: null
-    },
-    resolution: {
-      value: new Vector2(1 / 1024, 1 / 512)
-    }
-  },
-  vertexShader: `
+	name: `FXAAShader`,
+	uniforms: {
+		tDiffuse: {
+			value: null,
+		},
+		resolution: {
+			value: new Vector2(1 / 1024, 1 / 512),
+		},
+	},
+	vertexShader: `
 
 		varying vec2 vUv;
 
@@ -45,7 +62,7 @@ var $f = {
 			gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
 
 		}`,
-  fragmentShader: `
+	fragmentShader: `
 
 		// FXAA algorithm from NVIDIA, C# implementation by Jasper Flick, GLSL port by Dave Hoskins
 		// http://developer.download.nvidia.com/assets/gamedev/files/sdk/11/FXAA_WhitePaper.pdf
@@ -301,7 +318,7 @@ var $f = {
 
 			gl_FragColor = ApplyFXAA( tDiffuse, resolution.xy, vUv );
 
-		}`
+		}`,
 };
 var ep = `
   #include <packing>
@@ -352,108 +369,108 @@ var ep = `
   }
 `;
 var tp = class {
-  rt;
-  rt2;
-  edge;
-  fxaa;
-  edgeMat;
-  fxaaMat;
-  constructor() {
-    this.rt = new WebGLRenderTarget(1, 1, {
-      type: FloatType
-    });
-    this.rt.depthTexture = new DepthTexture(1, 1);
-    this.rt.depthTexture.type = UnsignedIntType;
-    this.rt2 = new WebGLRenderTarget(1, 1, {
-      type: UnsignedByteType
-    });
-    this.edgeMat = new ShaderMaterial({
-      uniforms: {
-        tColor: {
-          value: this.rt.texture
-        },
-        tDepth: {
-          value: this.rt.depthTexture
-        },
-        texel: {
-          value: new Vector2()
-        },
-        cameraNear: {
-          value: 0.5
-        },
-        cameraFar: {
-          value: 5000
-        },
-        inkColor: {
-          value: new Color(2825498)
-        },
-        strength: {
-          value: 0.85
-        },
-        threshLo: {
-          value: 0.035
-        },
-        threshHi: {
-          value: 0.12
-        },
-        fadeStart: {
-          value: 900
-        },
-        fadeEnd: {
-          value: 3200
-        },
-        saturation: {
-          value: 1
-        }
-      },
-      vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
-      fragmentShader: ep,
-      depthTest: false,
-      depthWrite: false
-    });
-    this.edge = new PostFX(this.edgeMat);
-    this.fxaaMat = new ShaderMaterial({
-      uniforms: UniformsUtils.clone($f.uniforms),
-      vertexShader: $f.vertexShader,
-      fragmentShader: $f.fragmentShader,
-      depthTest: false,
-      depthWrite: false
-    });
-    this.fxaaMat.uniforms.tDiffuse.value = this.rt2.texture;
-    this.fxaa = new PostFX(this.fxaaMat);
-  }
-  setInk(e) {
-    this.edgeMat.uniforms.inkColor.value.setHex(e);
-  }
-  setFade(e, t) {
-    this.edgeMat.uniforms.fadeStart.value = e;
-    this.edgeMat.uniforms.fadeEnd.value = t;
-  }
-  setSize(e, t) {
-    e = Math.max(1, Math.floor(e));
-    t = Math.max(1, Math.floor(t));
-    this.rt.setSize(e, t);
-    this.rt2.setSize(e, t);
-    this.edgeMat.uniforms.texel.value.set(1 / e, 1 / t);
-    this.fxaaMat.uniforms.resolution.value.set(1 / e, 1 / t);
-  }
-  render(e, t, n) {
-    this.edgeMat.uniforms.cameraNear.value = n.near;
-    this.edgeMat.uniforms.cameraFar.value = n.far;
-    e.setRenderTarget(this.rt);
-    e.clear();
-    e.render(t, n);
-    e.setRenderTarget(this.rt2);
-    this.edge.render(e);
-    e.setRenderTarget(null);
-    this.fxaa.render(e);
-  }
-  dispose() {
-    this.rt.dispose();
-    this.rt2.dispose();
-    this.edge.dispose();
-    this.fxaa.dispose();
-  }
+	rt;
+	rt2;
+	edge;
+	fxaa;
+	edgeMat;
+	fxaaMat;
+	constructor() {
+		this.rt = new WebGLRenderTarget(1, 1, {
+			type: FloatType,
+		});
+		this.rt.depthTexture = new DepthTexture(1, 1);
+		this.rt.depthTexture.type = UnsignedIntType;
+		this.rt2 = new WebGLRenderTarget(1, 1, {
+			type: UnsignedByteType,
+		});
+		this.edgeMat = new ShaderMaterial({
+			uniforms: {
+				tColor: {
+					value: this.rt.texture,
+				},
+				tDepth: {
+					value: this.rt.depthTexture,
+				},
+				texel: {
+					value: new Vector2(),
+				},
+				cameraNear: {
+					value: 0.5,
+				},
+				cameraFar: {
+					value: 5000,
+				},
+				inkColor: {
+					value: new Color(2825498),
+				},
+				strength: {
+					value: 0.85,
+				},
+				threshLo: {
+					value: 0.035,
+				},
+				threshHi: {
+					value: 0.12,
+				},
+				fadeStart: {
+					value: 900,
+				},
+				fadeEnd: {
+					value: 3200,
+				},
+				saturation: {
+					value: 1,
+				},
+			},
+			vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+			fragmentShader: ep,
+			depthTest: false,
+			depthWrite: false,
+		});
+		this.edge = new PostFX(this.edgeMat);
+		this.fxaaMat = new ShaderMaterial({
+			uniforms: UniformsUtils.clone($f.uniforms),
+			vertexShader: $f.vertexShader,
+			fragmentShader: $f.fragmentShader,
+			depthTest: false,
+			depthWrite: false,
+		});
+		this.fxaaMat.uniforms.tDiffuse.value = this.rt2.texture;
+		this.fxaa = new PostFX(this.fxaaMat);
+	}
+	setInk(e) {
+		this.edgeMat.uniforms.inkColor.value.setHex(e);
+	}
+	setFade(e, t) {
+		this.edgeMat.uniforms.fadeStart.value = e;
+		this.edgeMat.uniforms.fadeEnd.value = t;
+	}
+	setSize(e, t) {
+		e = Math.max(1, Math.floor(e));
+		t = Math.max(1, Math.floor(t));
+		this.rt.setSize(e, t);
+		this.rt2.setSize(e, t);
+		this.edgeMat.uniforms.texel.value.set(1 / e, 1 / t);
+		this.fxaaMat.uniforms.resolution.value.set(1 / e, 1 / t);
+	}
+	render(e, t, n) {
+		this.edgeMat.uniforms.cameraNear.value = n.near;
+		this.edgeMat.uniforms.cameraFar.value = n.far;
+		e.setRenderTarget(this.rt);
+		e.clear();
+		e.render(t, n);
+		e.setRenderTarget(this.rt2);
+		this.edge.render(e);
+		e.setRenderTarget(null);
+		this.fxaa.render(e);
+	}
+	dispose() {
+		this.rt.dispose();
+		this.rt2.dispose();
+		this.edge.dispose();
+		this.fxaa.dispose();
+	}
 };
 
 export { $f, PostFX, Xf, ep, fxaaMesh, tp };
