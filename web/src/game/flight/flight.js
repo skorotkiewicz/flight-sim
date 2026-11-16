@@ -1,10 +1,9 @@
 import { MathUtils, Matrix4, Quaternion, Vector3 } from "../core/three.js";
-
 var FLAP_POSITIONS = [0, 0.5, 1];
 var FLAP_LABELS = [`UP`, `T/O`, `LAND`];
-var pu = 0.61;
-var mu = 1.15;
-var hu = {
+var FLAP_DEFLECTION_RADIANS = 0.61;
+var CRASH_SPEED_TOLERANCE = 1.15;
+var DEFAULT_FLIGHT_SPEC = {
 	mass: 650,
 	wingArea: 21.5,
 	rho: 1.2,
@@ -47,7 +46,7 @@ var hu = {
 	flapRate: 0.6,
 	flapSpeed: 30,
 };
-var gu = () => ({
+var createFlightInput = () => ({
 	pitch: 0,
 	roll: 0,
 	yaw: 0,
@@ -55,7 +54,7 @@ var gu = () => ({
 	brake: false,
 	flaps: 0,
 });
-var _u = class {
+var FlightState = class {
 	pos = new Vector3();
 	vel = new Vector3();
 	quat = new Quaternion();
@@ -81,7 +80,7 @@ var _u = class {
 	flaps = 0;
 	flapsBlown = false;
 };
-var vu = {
+var DEFAULT_FLIGHT_CONTACTS = {
 	wheels: [new Vector3(-0.92, -1.36, -0.6), new Vector3(0.92, -1.36, -0.6)],
 	third: new Vector3(0, -0.22, 3.85),
 	tricycle: false,
@@ -120,32 +119,32 @@ var vu = {
 		},
 	],
 };
-var yu = new Vector3();
-var bu = new Vector3();
-var xu = new Vector3();
-var Su = new Vector3();
-var Cu = new Vector3();
-var wu = new Vector3();
-var Tu = new Vector3();
-var Eu = new Vector3();
-var Du = new Vector3();
-var Ou = new Vector3();
-var ku = new Quaternion();
-var Au = new Vector3();
-var ju = new Vector3();
-var Mu = new Vector3();
-var Nu = new Vector3();
-var Pu = new Vector3();
-var Fu = new Vector3();
-var Iu = new Vector3();
-var Lu = new Vector3();
-var Ru = new Quaternion();
-var zu = new Vector3();
-function Bu(e, t) {
+var flightForwardVector = new Vector3();
+var flightUpVector = new Vector3();
+var flightRightVector = new Vector3();
+var flightAirVelocity = new Vector3();
+var flightLocalAirVelocity = new Vector3();
+var flightAirDirection = new Vector3();
+var flightLiftDirection = new Vector3();
+var flightTotalForce = new Vector3();
+var flightGroundTorque = new Vector3();
+var flightAngularAcceleration = new Vector3();
+var flightInverseQuaternion = new Quaternion();
+var flightContactOffset = new Vector3();
+var flightContactPosition = new Vector3();
+var flightWorldAngularVelocity = new Vector3();
+var flightContactVelocity = new Vector3();
+var flightGroundForward = new Vector3();
+var flightGroundRight = new Vector3();
+var flightContactForce = new Vector3();
+var flightScratchVector = new Vector3();
+var flightRotationDelta = new Quaternion();
+var flightGroundContactOffset = new Vector3();
+function getFlapStallAngle(e, t) {
 	return e.stallAlpha - e.flapStall * t;
 }
-function Vu(e, t, n = 0) {
-	let r = Bu(e, n);
+function getLiftCoefficient(e, t, n = 0) {
+	let r = getFlapStallAngle(e, n);
 	let i = e.cl0 + e.flapCl * n;
 	let a = Math.sin(t * 2) * 1.05;
 	if (t > r) {
@@ -161,7 +160,7 @@ function Vu(e, t, n = 0) {
 	}
 	return i + e.clSlope * t;
 }
-function Hu(e, t, n, r, i, a = vu) {
+function stepFlight(e, t, n, r, i, a = DEFAULT_FLIGHT_CONTACTS) {
 	let o = {
 		crashed: null,
 		touchdown: null,
@@ -171,23 +170,28 @@ function Hu(e, t, n, r, i, a = vu) {
 	};
 	let s = e.health;
 	e.t += i;
-	yu.set(0, 0, -1).applyQuaternion(e.quat);
-	bu.set(0, 1, 0).applyQuaternion(e.quat);
-	xu.set(1, 0, 0).applyQuaternion(e.quat);
-	ku.copy(e.quat).invert();
+	flightForwardVector.set(0, 0, -1).applyQuaternion(e.quat);
+	flightUpVector.set(0, 1, 0).applyQuaternion(e.quat);
+	flightRightVector.set(1, 0, 0).applyQuaternion(e.quat);
+	flightInverseQuaternion.copy(e.quat).invert();
 	e.throttle = MathUtils.clamp(n.throttle, 0, 1);
 	let c = s.engine > 0 ? e.throttle : 0;
 	if (s.engine > 0 && s.engine < 0.3) {
 		c *= 0.55 + Math.abs(Math.sin(e.t * 7.3) * Math.sin(e.t * 2.1)) * 0.45;
 	}
 	e.rpm += (c - e.rpm) * Math.min(1, i * t.spoolRate);
-	Su.copy(e.vel).sub(r.wind);
-	let l = Su.length();
-	Cu.copy(Su).applyQuaternion(ku);
-	let u = -Cu.z;
+	flightAirVelocity.copy(e.vel).sub(r.wind);
+	let l = flightAirVelocity.length();
+	flightLocalAirVelocity
+		.copy(flightAirVelocity)
+		.applyQuaternion(flightInverseQuaternion);
+	let u = -flightLocalAirVelocity.z;
 	e.airspeed = l;
-	e.alpha = Math.atan2(-Cu.y, Math.max(Math.abs(u), 0.5) * Math.sign(u || 1));
-	e.beta = Math.atan2(Cu.x, Math.max(Math.abs(u), 1));
+	e.alpha = Math.atan2(
+		-flightLocalAirVelocity.y,
+		Math.max(Math.abs(u), 0.5) * Math.sign(u || 1),
+	);
+	e.beta = Math.atan2(flightLocalAirVelocity.x, Math.max(Math.abs(u), 1));
 	let d = MathUtils.clamp(1 - (l - t.flapSpeed) / (t.flapSpeed * 0.3), 0, 1);
 	let f = Math.min(MathUtils.clamp(n.flaps, 0, 1), d);
 	e.flapsBlown = n.flaps > d + 0.01;
@@ -197,39 +201,45 @@ function Hu(e, t, n, r, i, a = vu) {
 		e.flaps = Math.max(d, e.flaps - p * 2);
 	}
 	let m = e.flaps;
-	e.stalled = e.alpha > Bu(t, m) && l > 3;
+	e.stalled = e.alpha > getFlapStallAngle(t, m) && l > 3;
 	let h = t.rho * 0.5 * l * l;
-	Eu.set(0, 0, 0);
+	flightTotalForce.set(0, 0, 0);
 	if (l > 0.5) {
-		wu.copy(Su).divideScalar(l);
-		let n = Vu(t, e.alpha, m) * (0.45 + s.wings * 0.55);
+		flightAirDirection.copy(flightAirVelocity).divideScalar(l);
+		let n = getLiftCoefficient(t, e.alpha, m) * (0.45 + s.wings * 0.55);
 		let r = Math.sin(e.alpha);
 		let i =
 			t.cd0 * (1 + (1 - s.wings) * 1.5) +
 			t.flapCd * m * m +
 			t.inducedK * n * n +
 			r * 1.1 * r;
-		Tu.crossVectors(xu, wu);
-		let a = Tu.length();
+		flightLiftDirection.crossVectors(flightRightVector, flightAirDirection);
+		let a = flightLiftDirection.length();
 		if (a > 0.0001) {
-			Eu.addScaledVector(Tu.divideScalar(a), h * t.wingArea * n);
+			flightTotalForce.addScaledVector(
+				flightLiftDirection.divideScalar(a),
+				h * t.wingArea * n,
+			);
 		}
-		Eu.addScaledVector(wu, -h * t.wingArea * i);
-		Eu.addScaledVector(xu, -h * t.sideArea * t.cyBeta * e.beta);
+		flightTotalForce.addScaledVector(flightAirDirection, -h * t.wingArea * i);
+		flightTotalForce.addScaledVector(
+			flightRightVector,
+			-h * t.sideArea * t.cyBeta * e.beta,
+		);
 	}
 	let g =
 		e.rpm *
 		t.maxThrust *
 		Math.max(0, 1 - Math.max(u, 0) / t.propVmax) *
 		(s.engine > 0 ? 0.3 + s.engine * 0.7 : 0);
-	Eu.addScaledVector(yu, g);
-	Eu.y -= t.mass * 9.81;
+	flightTotalForce.addScaledVector(flightForwardVector, g);
+	flightTotalForce.y -= t.mass * 9.81;
 	let _ = Math.min(h / t.qRef, 1.6);
 	let v = 0.35 + s.tail * 0.65;
 	let y = e.angVel;
 	let b = MathUtils.clamp(e.alpha - (t.alphaTrim - t.flapTrim * m), -0.6, 0.6);
 	let x = MathUtils.clamp(e.beta, -0.6, 0.6);
-	Ou.set(
+	flightAngularAcceleration.set(
 		n.pitch * t.pitchAcc * _ * v -
 			y.x * t.pitchDamp * (0.3 + _) -
 			b * t.pitchStab * _,
@@ -239,23 +249,25 @@ function Hu(e, t, n, r, i, a = vu) {
 			(1 - s.wings) * 1.2 * _,
 	);
 	if (e.stalled) {
-		Ou.z += Math.sin(e.t * 1.7) * 2.2 * Math.min(_, 1);
+		flightAngularAcceleration.z += Math.sin(e.t * 1.7) * 2.2 * Math.min(_, 1);
 	}
 	let S = e.pos.y - r.groundHeight(e.pos.x, e.pos.z) < 8;
 	let C = e.wheels;
 	e.wheels = 0;
-	Du.set(0, 0, 0);
+	flightGroundTorque.set(0, 0, 0);
 	let w = false;
 	if (S) {
-		Mu.copy(y).applyQuaternion(e.quat);
-		Pu.set(yu.x, 0, yu.z);
-		if (Pu.lengthSq() < 0.000001) {
-			Pu.set(0, 0, -1);
+		flightWorldAngularVelocity.copy(y).applyQuaternion(e.quat);
+		flightGroundForward.set(flightForwardVector.x, 0, flightForwardVector.z);
+		if (flightGroundForward.lengthSq() < 0.000001) {
+			flightGroundForward.set(0, 0, -1);
 		}
-		Pu.normalize();
-		Fu.set(-Pu.z, 0, Pu.x);
+		flightGroundForward.normalize();
+		flightGroundRight.set(-flightGroundForward.z, 0, flightGroundForward.x);
 		let i = (e) => {
-			let n = r.surfaceAt ? r.surfaceAt(ju.x, ju.z) : `grass`;
+			let n = r.surfaceAt
+				? r.surfaceAt(flightContactPosition.x, flightContactPosition.z)
+				: `grass`;
 			let i =
 				n === `paved` ? t.gripPaved : t.gripGrass * (n === `rough` ? 0.85 : 1);
 			if (e) {
@@ -265,10 +277,10 @@ function Hu(e, t, n, r, i, a = vu) {
 			return (t.rollFriction * a) / i;
 		};
 		let s = (n, a) => {
-			Au.copy(n).applyQuaternion(e.quat);
-			ju.copy(e.pos).add(Au);
-			let o = r.groundHeight(ju.x, ju.z);
-			let s = Math.max(o, 0) - ju.y;
+			flightContactOffset.copy(n).applyQuaternion(e.quat);
+			flightContactPosition.copy(e.pos).add(flightContactOffset);
+			let o = r.groundHeight(flightContactPosition.x, flightContactPosition.z);
+			let s = Math.max(o, 0) - flightContactPosition.y;
 			if (s <= 0) {
 				return false;
 			}
@@ -278,20 +290,36 @@ function Hu(e, t, n, r, i, a = vu) {
 			if (typeof a != `number`) {
 				a = i(a === `brake`);
 			}
-			Nu.crossVectors(Mu, Au).add(e.vel);
-			let c = Nu.y > 0 ? t.gearC * 2 : t.gearC;
-			let l = Math.max(0, t.gearK * s - c * Nu.y);
-			let u = Nu.dot(Pu);
-			let d = Nu.dot(Fu);
+			flightContactVelocity
+				.crossVectors(flightWorldAngularVelocity, flightContactOffset)
+				.add(e.vel);
+			let c = flightContactVelocity.y > 0 ? t.gearC * 2 : t.gearC;
+			let l = Math.max(0, t.gearK * s - c * flightContactVelocity.y);
+			let u = flightContactVelocity.dot(flightGroundForward);
+			let d = flightContactVelocity.dot(flightGroundRight);
 			let f = -MathUtils.clamp(u * 3000, -a * l, a * l);
 			let p = -MathUtils.clamp(d * 4000, l * -0.9, l * 0.9);
-			Iu.set(0, l, 0).addScaledVector(Pu, f);
-			Eu.add(Iu);
-			Du.add(Lu.crossVectors(Au, Iu));
-			Iu.copy(Fu).multiplyScalar(p);
-			Eu.add(Iu);
-			zu.set(Au.x, 0, Au.z);
-			Du.add(Lu.crossVectors(zu, Iu));
+			flightContactForce.set(0, l, 0).addScaledVector(flightGroundForward, f);
+			flightTotalForce.add(flightContactForce);
+			flightGroundTorque.add(
+				flightScratchVector.crossVectors(
+					flightContactOffset,
+					flightContactForce,
+				),
+			);
+			flightContactForce.copy(flightGroundRight).multiplyScalar(p);
+			flightTotalForce.add(flightContactForce);
+			flightGroundContactOffset.set(
+				flightContactOffset.x,
+				0,
+				flightContactOffset.z,
+			);
+			flightGroundTorque.add(
+				flightScratchVector.crossVectors(
+					flightGroundContactOffset,
+					flightContactForce,
+				),
+			);
 			return true;
 		};
 		let c = n.brake ? `brake` : `wheel`;
@@ -303,20 +331,22 @@ function Hu(e, t, n, r, i, a = vu) {
 		if (s(a.third, a.tricycle ? `wheel` : t.skidFriction)) {
 			e.wheels++;
 		}
-		let l = t.crashSpeed * mu;
+		let l = t.crashSpeed * CRASH_SPEED_TOLERANCE;
 		for (let t of a.crash) {
-			Au.copy(t.p).applyQuaternion(e.quat);
-			ju.copy(e.pos).add(Au);
-			let n = r.groundHeight(ju.x, ju.z);
+			flightContactOffset.copy(t.p).applyQuaternion(e.quat);
+			flightContactPosition.copy(e.pos).add(flightContactOffset);
+			let n = r.groundHeight(flightContactPosition.x, flightContactPosition.z);
 			let i = Math.max(n, 0);
-			if (ju.y >= i) {
+			if (flightContactPosition.y >= i) {
 				continue;
 			}
 			if (n < -0.3) {
 				w = true;
 			}
-			Nu.crossVectors(Mu, Au).add(e.vel);
-			let a = Nu.length();
+			flightContactVelocity
+				.crossVectors(flightWorldAngularVelocity, flightContactOffset)
+				.add(e.vel);
+			let a = flightContactVelocity.length();
 			if (t.kind === `prop`) {
 				if (e.rpm > 0.15) {
 					o.propStrike = true;
@@ -328,14 +358,17 @@ function Hu(e, t, n, r, i, a = vu) {
 			} else if (t.kind === `top`) {
 				o.crashed = `Flipped over`;
 			} else if (t.kind === `tail`) {
-				if (-Nu.y > l * 1.5) {
+				if (-flightContactVelocity.y > l * 1.5) {
 					o.crashed = `Tail strike`;
 				}
 				o.scrape = true;
 				s(t.p, 0.5);
 			} else if (t.kind === `nose` && a > l) {
 				o.crashed = `Nosed in`;
-			} else if (t.kind === `wing` && (-Nu.y > l * 0.6 || a > l * 3)) {
+			} else if (
+				t.kind === `wing` &&
+				(-flightContactVelocity.y > l * 0.6 || a > l * 3)
+			) {
 				o.crashed = `Cartwheeled`;
 			} else {
 				o.scrape = true;
@@ -347,15 +380,17 @@ function Hu(e, t, n, r, i, a = vu) {
 			o.crashed = `Ditched in the water`;
 		}
 		if (e.wheels > 0) {
-			Lu.copy(Du).applyQuaternion(ku);
-			Ou.x += Lu.x / t.inertiaPitch;
-			Ou.y += Lu.y / t.inertiaYaw;
-			Ou.z += Lu.z / t.inertiaRoll;
-			let r = Math.atan2(xu.y, bu.y);
-			Ou.y += x * t.yawStab * _ * 0.75 - y.y * 3.5;
-			Ou.z += -y.z * 4 - r * 12;
+			flightScratchVector
+				.copy(flightGroundTorque)
+				.applyQuaternion(flightInverseQuaternion);
+			flightAngularAcceleration.x += flightScratchVector.x / t.inertiaPitch;
+			flightAngularAcceleration.y += flightScratchVector.y / t.inertiaYaw;
+			flightAngularAcceleration.z += flightScratchVector.z / t.inertiaRoll;
+			let r = Math.atan2(flightRightVector.y, flightUpVector.y);
+			flightAngularAcceleration.y += x * t.yawStab * _ * 0.75 - y.y * 3.5;
+			flightAngularAcceleration.z += -y.z * 4 - r * 12;
 			let i = Math.hypot(e.vel.x, e.vel.z);
-			Ou.y +=
+			flightAngularAcceleration.y +=
 				-(n.yaw + n.roll * 0.6) *
 				t.groundSteer *
 				Math.min(i / 4, 1) *
@@ -363,7 +398,7 @@ function Hu(e, t, n, r, i, a = vu) {
 		}
 	}
 	if (e.wheels > 0 && C === 0 && e.airTime > 0.6) {
-		let t = Math.abs(Math.atan2(xu.y, bu.y));
+		let t = Math.abs(Math.atan2(flightRightVector.y, flightUpVector.y));
 		o.touchdown = {
 			sink: Math.max(0, -e.lastSink),
 			bank: t,
@@ -373,15 +408,18 @@ function Hu(e, t, n, r, i, a = vu) {
 	if (e.wheels === 0) {
 		e.lastSink = e.vel.y;
 	}
-	e.vel.addScaledVector(Eu, i / t.mass);
+	e.vel.addScaledVector(flightTotalForce, i / t.mass);
 	e.pos.addScaledVector(e.vel, i);
-	y.addScaledVector(Ou, i);
+	y.addScaledVector(flightAngularAcceleration, i);
 	y.clampScalar(-5, 5);
-	Lu.copy(y).multiplyScalar(i);
-	let T = Lu.length();
+	flightScratchVector.copy(y).multiplyScalar(i);
+	let T = flightScratchVector.length();
 	if (T > 1e-9) {
-		Ru.setFromAxisAngle(Lu.divideScalar(T), T);
-		e.quat.multiply(Ru).normalize();
+		flightRotationDelta.setFromAxisAngle(
+			flightScratchVector.divideScalar(T),
+			T,
+		);
+		e.quat.multiply(flightRotationDelta).normalize();
 	}
 	let E = r.groundHeight(e.pos.x, e.pos.z);
 	if (e.pos.y < Math.max(E, 0) - 1.5) {
@@ -398,7 +436,7 @@ function Hu(e, t, n, r, i, a = vu) {
 	}
 	return o;
 }
-function Uu(e, t, n = vu) {
+function getGroundRestQuaternion(e, t, n = DEFAULT_FLIGHT_CONTACTS) {
 	let r = new Vector3(e, 0, t).normalize();
 	let i = new Vector3(0, 1, 0);
 	let a = new Vector3().crossVectors(r, i).normalize();
@@ -410,12 +448,12 @@ function Uu(e, t, n = vu) {
 	s.multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), u));
 	return s;
 }
-function Wu(e, t = vu) {
+function getGroundRestHeight(e, t = DEFAULT_FLIGHT_CONTACTS) {
 	return -t.wheels[0].clone().applyQuaternion(e).y - 0.02;
 }
-var Gu = 0.06;
-var Ku = 10;
-function qu(e, t, n) {
+var TOUCH_STICK_DEADZONE = 0.06;
+var TOUCH_HIT_PADDING = 10;
+function createTouchControlLayout(e, t, n) {
 	let r = Math.max(0.85, Math.min(1.4, Math.min(e, t) / 390));
 	let i = t - n.b - r * 18;
 	let a = r * 46;
@@ -492,11 +530,12 @@ function qu(e, t, n) {
 		rightEdge: f - d,
 	};
 }
-var Ju = (e, t, n, r) => (t - e.x) ** 2 + (n - e.y) ** 2 <= (e.r + r) ** 2;
-var Yu = (e, t, n, r) =>
+var touchCircleContainsPoint = (e, t, n, r) =>
+	(t - e.x) ** 2 + (n - e.y) ** 2 <= (e.r + r) ** 2;
+var touchRectangleContainsPoint = (e, t, n, r) =>
 	t >= e.x - r && t <= e.x + e.w + r && n >= e.y - r && n <= e.y + e.h + r;
-function Xu(e, t, n, r) {
-	let i = Ku * e.u;
+function hitTestTouchControls(e, t, n, r) {
+	let i = TOUCH_HIT_PADDING * e.u;
 	let a = null;
 	let o = Infinity;
 	for (let s of Object.keys(e.buttons)) {
@@ -504,7 +543,7 @@ function Xu(e, t, n, r) {
 			continue;
 		}
 		let c = e.buttons[s];
-		if (!Ju(c, t, n, i)) {
+		if (!touchCircleContainsPoint(c, t, n, i)) {
 			continue;
 		}
 		let l = Math.hypot(t - c.x, n - c.y) - c.r;
@@ -515,21 +554,25 @@ function Xu(e, t, n, r) {
 	}
 	return (
 		a ||
-		(Yu(e.lever, t, n, i) ? `lever` : Yu(e.stickZone, t, n, 0) ? `stick` : null)
+		(touchRectangleContainsPoint(e.lever, t, n, i)
+			? `lever`
+			: touchRectangleContainsPoint(e.stickZone, t, n, 0)
+				? `stick`
+				: null)
 	);
 }
-function Zu(e) {
+function shapeTouchStickAxis(e) {
 	let t = Math.abs(e);
-	if (t <= Gu) {
+	if (t <= TOUCH_STICK_DEADZONE) {
 		return 0;
 	}
-	let n = Math.min(1, (t - Gu) / 0.94);
+	let n = Math.min(1, (t - TOUCH_STICK_DEADZONE) / 0.94);
 	return Math.sign(e) * n ** 1.4;
 }
-function Qu(e, t) {
+function getTouchLeverThrottle(e, t) {
 	return Math.max(0, Math.min(1, (e.y + e.h - t) / e.h));
 }
-function $u(e, t, n) {
+function deviceOrientationToFlightAttitude(e, t, n) {
 	let r = (e * Math.PI) / 180;
 	let i = (t * Math.PI) / 180;
 	let a = -Math.cos(r) * Math.sin(i);
@@ -543,7 +586,7 @@ function $u(e, t, n) {
 		pitch: Math.atan2(s, u),
 	};
 }
-function ed(e, t) {
+function tiltAttitudeToStick(e, t) {
 	let n = (Math.PI * 25) / 180;
 	let r = (Math.PI * 3) / 180;
 	let i = (e) => {
@@ -584,13 +627,13 @@ var TouchHud = class {
 			b: 0,
 		},
 	) {
-		this.layout = qu(e, t, n);
+		this.layout = createTouchControlLayout(e, t, n);
 	}
 	resize(e, t, n) {
-		this.layout = qu(e, t, n);
+		this.layout = createTouchControlLayout(e, t, n);
 	}
 	down(e, t, n, r) {
-		let i = Xu(this.layout, t, n, this.bailShown);
+		let i = hitTestTouchControls(this.layout, t, n, this.bailShown);
 		if (!i || (i === `stick` && this.find(`stick`))) {
 			return null;
 		} else {
@@ -609,7 +652,7 @@ var TouchHud = class {
 					this.ptrs.get(e).y0 = NaN;
 				} else {
 					this.lastLeverTap = r;
-					this.throttle = Qu(this.layout.lever, n);
+					this.throttle = getTouchLeverThrottle(this.layout.lever, n);
 				}
 			} else if (
 				i === `pause` ||
@@ -630,7 +673,7 @@ var TouchHud = class {
 			r.x = t;
 			r.y = n;
 			if (r.ctl === `lever` && !Number.isNaN(r.y0)) {
-				this.throttle = Qu(this.layout.lever, n);
+				this.throttle = getTouchLeverThrottle(this.layout.lever, n);
 			}
 		}
 	}
@@ -701,7 +744,7 @@ var TouchHud = class {
 		}
 	}
 };
-var nd = class e {
+var TouchFlightControls = class e {
 	model = new TouchHud();
 	enabled = false;
 	onTouch = null;
@@ -789,7 +832,7 @@ var nd = class e {
 			this.neutral ||= {
 				...this.tiltSmooth,
 			};
-			return ed(this.tiltSmooth, this.neutral);
+			return tiltAttitudeToStick(this.tiltSmooth, this.neutral);
 		}
 	}
 	update(e) {
@@ -816,57 +859,60 @@ var nd = class e {
 			return;
 		}
 		let t = screen.orientation?.angle ?? window.orientation ?? 0;
-		this.tiltNow = $u(e.beta, e.gamma, ((t % 360) + 360) % 360);
+		this.tiltNow = deviceOrientationToFlightAttitude(
+			e.beta,
+			e.gamma,
+			((t % 360) + 360) % 360,
+		);
 	};
 };
-var rd = 4.5;
-
+var KEYBOARD_AXIS_SLEW_RATE = 4.5;
 export {
-	$u,
-	Au,
-	Bu,
-	Cu,
-	Du,
-	Eu,
+	deviceOrientationToFlightAttitude,
+	flightContactOffset,
+	getFlapStallAngle,
+	flightLocalAirVelocity,
+	flightGroundTorque,
+	flightTotalForce,
 	FLAP_LABELS,
 	FLAP_POSITIONS,
-	Fu,
-	Gu,
-	Hu,
-	Iu,
-	Ju,
-	Ku,
-	Lu,
-	Mu,
-	Nu,
-	Ou,
-	Pu,
-	Qu,
-	Ru,
-	Su,
+	flightGroundRight,
+	TOUCH_STICK_DEADZONE,
+	stepFlight,
+	flightContactForce,
+	touchCircleContainsPoint,
+	TOUCH_HIT_PADDING,
+	flightScratchVector,
+	flightWorldAngularVelocity,
+	flightContactVelocity,
+	flightAngularAcceleration,
+	flightGroundForward,
+	getTouchLeverThrottle,
+	flightRotationDelta,
+	flightAirVelocity,
 	TouchHud,
-	Tu,
-	Uu,
-	Vu,
-	Wu,
-	Xu,
-	Yu,
-	Zu,
-	_u,
-	bu,
-	ed,
-	gu,
-	hu,
-	ju,
-	ku,
-	mu,
-	nd,
-	pu,
-	qu,
-	rd,
-	vu,
-	wu,
-	xu,
-	yu,
-	zu,
+	flightLiftDirection,
+	getGroundRestQuaternion,
+	getLiftCoefficient,
+	getGroundRestHeight,
+	hitTestTouchControls,
+	touchRectangleContainsPoint,
+	shapeTouchStickAxis,
+	FlightState,
+	flightUpVector,
+	tiltAttitudeToStick,
+	createFlightInput,
+	DEFAULT_FLIGHT_SPEC,
+	flightContactPosition,
+	flightInverseQuaternion,
+	CRASH_SPEED_TOLERANCE,
+	TouchFlightControls,
+	FLAP_DEFLECTION_RADIANS,
+	createTouchControlLayout,
+	KEYBOARD_AXIS_SLEW_RATE,
+	DEFAULT_FLIGHT_CONTACTS,
+	flightAirDirection,
+	flightRightVector,
+	flightForwardVector,
+	flightGroundContactOffset,
 };

@@ -1,0 +1,21 @@
+{
+	"map": {
+		"e": "hashSeedIntegers",
+		"t": "createSeededRandom",
+		"n": "SIMPLEX_GRADIENTS_2D",
+		"r": "SIMPLEX_SKEW_2D",
+		"i": "SIMPLEX_UNSKEW_2D",
+		"a": "SimplexNoise",
+		"o": "RUNWAY_DIMENSIONS",
+		"s": "clampTerrainValue",
+		"c": "terrainSmoothstep",
+		"l": "hexToLinearRgb",
+		"u": "TERRAIN_PALETTE",
+		"d": "Terrain",
+		"f": "buildTerrainChunk",
+		"p": "scatterChunkProps",
+		"m": "cachedTerrain",
+		"h": "workerScope"
+	},
+	"_comment": "Worker-specific top-level names inferred from usage and matching game terrain code. This map is separate from rename-map.json because the bundles reuse short names for different bindings. Apply: node tools/rename.mjs web/public/assets/chunk.worker.js worker-rename-map.json web/public/assets/chunk.worker.js"
+}

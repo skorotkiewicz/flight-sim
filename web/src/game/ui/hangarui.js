@@ -1,7 +1,15 @@
-import { Cf, Sf, gf, uf } from "../plane/planemodels.js";
-import { cp, op, up } from "../world/sky.js";
-
-var dp = (e) => document.getElementById(e);
+import {
+	formatPlaneLoadout,
+	savePlaneLoadout,
+	estimatePlanePerformance,
+	buildFlightSpec,
+} from "../plane/planemodels.js";
+import {
+	HANGAR_OPTIONS,
+	HANGAR_CATEGORIES,
+	HANGAR_STATS,
+} from "../world/sky.js";
+var getHangarElement = (e) => document.getElementById(e);
 var Hangar = class {
 	loadout;
 	onChange;
@@ -15,9 +23,9 @@ var Hangar = class {
 		this.onChange = t;
 		this.onClick = n;
 		this.active = r;
-		this.stats = gf(uf(e));
-		let i = dp(`hangar-tabs`);
-		op.forEach((e, t) => {
+		this.stats = estimatePlanePerformance(buildFlightSpec(e));
+		let i = getHangarElement(`hangar-tabs`);
+		HANGAR_CATEGORIES.forEach((e, t) => {
 			let n = document.createElement(`button`);
 			n.textContent = e.label;
 			n.addEventListener(`click`, () => {
@@ -26,8 +34,8 @@ var Hangar = class {
 			});
 			i.append(n);
 		});
-		let a = dp(`hangar-stats`);
-		for (let e of up) {
+		let a = getHangarElement(`hangar-stats`);
+		for (let e of HANGAR_STATS) {
 			let t = document.createElement(`div`);
 			t.className = `stat`;
 			t.innerHTML = `<span class="stat-label">${e.label}</span><span class="stat-bar"><i></i></span><span class="stat-val"></span><span class="stat-delta"></span>`;
@@ -60,28 +68,30 @@ var Hangar = class {
 	nav(e, t) {
 		if (e) {
 			this.onClick();
-			this.setCat((this.cat + e + op.length) % op.length);
+			this.setCat(
+				(this.cat + e + HANGAR_CATEGORIES.length) % HANGAR_CATEGORIES.length,
+			);
 		}
 		if (t) {
-			let e = op[this.cat].id;
-			let n = cp[e];
+			let e = HANGAR_CATEGORIES[this.cat].id;
+			let n = HANGAR_OPTIONS[e];
 			let r = n.findIndex((t) => t.id === this.loadout[e]);
 			this.choose(e, n[(r + t + n.length) % n.length].id);
 		}
 	}
 	setCat(e) {
 		this.cat = e;
-		dp(`hangar-tabs`)
+		getHangarElement(`hangar-tabs`)
 			.querySelectorAll(`button`)
 			.forEach((t, n) => t.classList.toggle(`on`, n === e));
 		this.renderCards();
 	}
 	renderCards() {
-		let e = op[this.cat].id;
-		let t = dp(`hangar-cards`);
+		let e = HANGAR_CATEGORIES[this.cat].id;
+		let t = getHangarElement(`hangar-cards`);
 		t.className = e === `paint` ? `cards swatches` : `cards`;
 		t.innerHTML = ``;
-		for (let n of cp[e]) {
+		for (let n of HANGAR_OPTIONS[e]) {
 			let r = document.createElement(`button`);
 			r.className = `card`;
 			r.classList.toggle(`on`, this.loadout[e] === n.id);
@@ -98,13 +108,15 @@ var Hangar = class {
 			r.addEventListener(`click`, () => this.choose(e, n.id));
 			t.append(r);
 		}
-		dp(`hangar-name`).textContent = Cf(this.loadout);
+		getHangarElement(`hangar-name`).textContent = formatPlaneLoadout(
+			this.loadout,
+		);
 	}
 	choose(e, t) {
 		if (this.loadout[e] !== t) {
 			this.onClick();
 			this.loadout[e] = t;
-			Sf(this.loadout);
+			savePlaneLoadout(this.loadout);
 			this.renderCards();
 			this.refreshStats(true);
 			this.onChange(this.loadout);
@@ -112,9 +124,9 @@ var Hangar = class {
 	}
 	refreshStats(e) {
 		let t = this.stats;
-		let n = gf(uf(this.loadout));
+		let n = estimatePlanePerformance(buildFlightSpec(this.loadout));
 		this.stats = n;
-		up.forEach((r, i) => {
+		HANGAR_STATS.forEach((r, i) => {
 			let a = this.bars[i];
 			a.fill.style.width = `${Math.round(r.bar(n) * 100)}%`;
 			a.val.textContent = r.text(n);
@@ -132,5 +144,4 @@ var Hangar = class {
 		});
 	}
 };
-
-export { Hangar, dp };
+export { Hangar, getHangarElement };

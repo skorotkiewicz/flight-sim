@@ -1,19 +1,18 @@
 import { FLAP_LABELS, FLAP_POSITIONS } from "../flight/flight.js";
-import { Fp } from "./instruments.js";
-import { df } from "../plane/planemodels.js";
+import { InstrumentCluster } from "./instruments.js";
+import { getPlaneEngineKind } from "../plane/planemodels.js";
 import { MathUtils, Vector2, Vector3 } from "../core/three.js";
-
-var Q = `#2b1d1a`;
-var Lp = `#fff6dd`;
-var Rp = `#2a9d8f`;
-var zp = `#f2b134`;
-var Bp = `#e04f3a`;
-var Vp = `"Baloo 2", "Trebuchet MS", sans-serif`;
-var Hp = new Vector3();
-var Up = new Vector3();
-var Wp = new Vector3();
-var Gp = new Vector3();
-function Kp(e, t, n, r, i, a) {
+var HUD_OUTLINE_COLOR = `#2b1d1a`;
+var HUD_PANEL_COLOR = `#fff6dd`;
+var HUD_SUCCESS_COLOR = `#2a9d8f`;
+var HUD_ACCENT_COLOR = `#f2b134`;
+var HUD_WARNING_COLOR = `#e04f3a`;
+var HUD_FONT_FAMILY = `"Baloo 2", "Trebuchet MS", sans-serif`;
+var hudProjectionScratch = new Vector3();
+var hudForwardScratch = new Vector3();
+var hudUpScratch = new Vector3();
+var hudRightScratch = new Vector3();
+function traceHudRoundedRect(e, t, n, r, i, a) {
 	e.beginPath();
 	e.moveTo(t + a, n);
 	e.arcTo(t + r, n, t + r, n + i, a);
@@ -22,15 +21,15 @@ function Kp(e, t, n, r, i, a) {
 	e.arcTo(t, n, t + r, n, a);
 	e.closePath();
 }
-function qp(e, t, n, r, i) {
-	e.fillStyle = Q;
-	Kp(e, t + 4, n + 4, r, i, 12);
+function drawHudPanel(e, t, n, r, i) {
+	e.fillStyle = HUD_OUTLINE_COLOR;
+	traceHudRoundedRect(e, t + 4, n + 4, r, i, 12);
 	e.fill();
-	e.fillStyle = Lp;
-	Kp(e, t, n, r, i, 12);
+	e.fillStyle = HUD_PANEL_COLOR;
+	traceHudRoundedRect(e, t, n, r, i, 12);
 	e.fill();
 	e.lineWidth = 3;
-	e.strokeStyle = Q;
+	e.strokeStyle = HUD_OUTLINE_COLOR;
 	e.stroke();
 }
 var Hud = class {
@@ -43,7 +42,7 @@ var Hud = class {
 	miniAt = new Vector2(1000000000, 1000000000);
 	miniT = 0;
 	miniSpan = 7000;
-	instruments = new Fp();
+	instruments = new InstrumentCluster();
 	clusterTop = 0;
 	clusterCx = 0;
 	visible = false;
@@ -68,11 +67,11 @@ var Hud = class {
 		this.miniAt.set(1000000000, 1000000000);
 	}
 	project(e, t) {
-		Hp.copy(e).project(t);
-		let n = Hp.z > 1;
+		hudProjectionScratch.copy(e).project(t);
+		let n = hudProjectionScratch.z > 1;
 		return {
-			x: ((Hp.x + 1) / 2) * this.w,
-			y: ((1 - Hp.y) / 2) * this.h,
+			x: ((hudProjectionScratch.x + 1) / 2) * this.w,
+			y: ((1 - hudProjectionScratch.y) / 2) * this.h,
 			behind: n,
 		};
 	}
@@ -111,43 +110,43 @@ var Hud = class {
 		n.save();
 		n.translate(16, this.h - 16 - a * 218);
 		n.scale(a, a);
-		qp(n, 0, 0, 220, 218);
+		drawHudPanel(n, 0, 0, 220, 218);
 		let c = r.airspeed * 3.6;
 		let l = r.pos.y - Math.max(e.world.groundHeight(r.pos.x, r.pos.z), 0);
-		n.fillStyle = Q;
-		n.font = `800 14px ${Vp}`;
+		n.fillStyle = HUD_OUTLINE_COLOR;
+		n.font = `800 14px ${HUD_FONT_FAMILY}`;
 		n.fillText(`SPEED`, 14, 24);
 		n.fillText(`ALT`, 120, 24);
-		n.font = `800 30px ${Vp}`;
-		n.fillStyle = e.stallWarn ? Bp : Q;
+		n.font = `800 30px ${HUD_FONT_FAMILY}`;
+		n.fillStyle = e.stallWarn ? HUD_WARNING_COLOR : HUD_OUTLINE_COLOR;
 		let u = `${Math.round(c)}`;
 		n.fillText(u, 14, 56);
 		let d = n.measureText(u).width;
-		n.fillStyle = Q;
+		n.fillStyle = HUD_OUTLINE_COLOR;
 		n.fillText(`${Math.round(r.pos.y)}`, 120, 56);
-		n.font = `700 13px ${Vp}`;
+		n.font = `700 13px ${HUD_FONT_FAMILY}`;
 		n.fillText(`km/h`, 14 + d + 4, 56);
 		n.fillText(`m  (${Math.round(l)} AGL)`, 120, 74);
 		if (e.stallWarn) {
-			n.fillStyle = Bp;
-			n.font = `800 15px ${Vp}`;
+			n.fillStyle = HUD_WARNING_COLOR;
+			n.font = `800 15px ${HUD_FONT_FAMILY}`;
 			n.fillText(`STALL!`, 14, 76);
 		}
-		n.font = `800 13px ${Vp}`;
-		n.fillStyle = Q;
+		n.font = `800 13px ${HUD_FONT_FAMILY}`;
+		n.fillStyle = HUD_OUTLINE_COLOR;
 		n.fillText(`THROTTLE`, 14, 102);
-		Kp(n, 14, 108, 192, 16, 8);
+		traceHudRoundedRect(n, 14, 108, 192, 16, 8);
 		n.fillStyle = `#fff`;
 		n.fill();
-		n.strokeStyle = Q;
+		n.strokeStyle = HUD_OUTLINE_COLOR;
 		n.lineWidth = 2.5;
 		n.stroke();
-		Kp(n, 16, 110, Math.max(6, r.throttle * 188), 12, 6);
-		n.fillStyle = zp;
+		traceHudRoundedRect(n, 16, 110, Math.max(6, r.throttle * 188), 12, 6);
+		n.fillStyle = HUD_ACCENT_COLOR;
 		n.fill();
-		n.fillStyle = Q;
-		n.font = `700 12px ${Vp}`;
-		let f = df(e.player.loadout.style);
+		n.fillStyle = HUD_OUTLINE_COLOR;
+		n.font = `700 12px ${HUD_FONT_FAMILY}`;
+		let f = getPlaneEngineKind(e.player.loadout.style);
 		let p =
 			f === `jet`
 				? `spool ${Math.round(r.rpm * 100)}%`
@@ -158,9 +157,9 @@ var Hud = class {
 		n.save();
 		n.translate(this.w - 16 - a * 120, this.h - 16 - a * 150);
 		n.scale(a, a);
-		qp(n, 0, 0, 120, 150);
-		n.fillStyle = Q;
-		n.font = `800 14px ${Vp}`;
+		drawHudPanel(n, 0, 0, 120, 150);
+		n.fillStyle = HUD_OUTLINE_COLOR;
+		n.font = `800 14px ${HUD_FONT_FAMILY}`;
 		n.fillText(`DAMAGE`, 14, 24);
 		this.drawDamage(n, 60, 92, r.health);
 		n.restore();
@@ -172,11 +171,11 @@ var Hud = class {
 	}
 	drawObjective(e, t, n) {
 		let r = this.g;
-		r.font = `800 ${t}px ${Vp}`;
+		r.font = `800 ${t}px ${HUD_FONT_FAMILY}`;
 		r.textAlign = `center`;
 		let i = r.measureText(e).width + 28;
-		qp(r, this.w / 2 - i / 2, n + 62, i, 30);
-		r.fillStyle = Q;
+		drawHudPanel(r, this.w / 2 - i / 2, n + 62, i, 30);
+		r.fillStyle = HUD_OUTLINE_COLOR;
 		r.fillText(e, this.w / 2, n + 62 + 21);
 		r.textAlign = `left`;
 	}
@@ -200,11 +199,11 @@ var Hud = class {
 	drawInstruments(e, t) {
 		let n = this.g;
 		let r = e.player;
-		r.forward(Up);
-		r.up(Wp);
-		Gp.set(1, 0, 0).applyQuaternion(r.s.quat);
-		let i = Math.asin(MathUtils.clamp(Up.y, -1, 1));
-		let a = Math.atan2(-Gp.y, Wp.y);
+		r.forward(hudForwardScratch);
+		r.up(hudUpScratch);
+		hudRightScratch.set(1, 0, 0).applyQuaternion(r.s.quat);
+		let i = Math.asin(MathUtils.clamp(hudForwardScratch.y, -1, 1));
+		let a = Math.atan2(-hudRightScratch.y, hudUpScratch.y);
 		let o = t.k;
 		n.save();
 		n.translate(t.cx - (o * 484) / 2, t.y);
@@ -228,28 +227,29 @@ var Hud = class {
 		e.lineTo(206, 156);
 		e.stroke();
 		e.restore();
-		e.font = `800 13px ${Vp}`;
-		e.fillStyle = r ? Bp : Q;
+		e.font = `800 13px ${HUD_FONT_FAMILY}`;
+		e.fillStyle = r ? HUD_WARNING_COLOR : HUD_OUTLINE_COLOR;
 		e.fillText(`FLAPS`, 14, 176);
 		let i = e.measureText(`FLAPS`).width;
-		e.font = `700 12px ${Vp}`;
-		e.fillStyle = r ? Bp : `#6b4b2a`;
+		e.font = `700 12px ${HUD_FONT_FAMILY}`;
+		e.fillStyle = r ? HUD_WARNING_COLOR : `#6b4b2a`;
 		e.fillText(r ? `TOO FAST — slow down!` : `(V ↔ F)`, 14 + i + 6, 176);
 		for (let n = 0; n < FLAP_POSITIONS.length; n++) {
 			let i = 14 + n * 66;
-			Kp(e, i, 182, 60, 18, 7);
-			e.fillStyle = n === t ? (r ? Bp : Rp) : `#fff`;
+			traceHudRoundedRect(e, i, 182, 60, 18, 7);
+			e.fillStyle =
+				n === t ? (r ? HUD_WARNING_COLOR : HUD_SUCCESS_COLOR) : `#fff`;
 			e.fill();
-			e.strokeStyle = Q;
+			e.strokeStyle = HUD_OUTLINE_COLOR;
 			e.lineWidth = 2;
 			e.stroke();
-			e.fillStyle = n === t ? `#fff` : Q;
-			e.font = `800 11px ${Vp}`;
+			e.fillStyle = n === t ? `#fff` : HUD_OUTLINE_COLOR;
+			e.font = `800 11px ${HUD_FONT_FAMILY}`;
 			e.textAlign = `center`;
 			e.fillText(FLAP_LABELS[n], i + 30, 195);
 			e.textAlign = `left`;
 		}
-		e.fillStyle = Q;
+		e.fillStyle = HUD_OUTLINE_COLOR;
 		e.beginPath();
 		let a = 44 + n * 132;
 		e.moveTo(a, 202);
@@ -264,13 +264,13 @@ var Hud = class {
 		e.save();
 		e.translate(t, n);
 		e.lineWidth = 2.5;
-		e.strokeStyle = Q;
+		e.strokeStyle = HUD_OUTLINE_COLOR;
 		e.fillStyle = i(r.wings);
-		Kp(e, -44, -22, 88, 16, 6);
+		traceHudRoundedRect(e, -44, -22, 88, 16, 6);
 		e.fill();
 		e.stroke();
 		e.fillStyle = i(Math.min(r.pilot, 1));
-		Kp(e, -8, -34, 16, 62, 6);
+		traceHudRoundedRect(e, -8, -34, 16, 62, 6);
 		e.fill();
 		e.stroke();
 		e.fillStyle = i(r.engine);
@@ -279,7 +279,7 @@ var Hud = class {
 		e.fill();
 		e.stroke();
 		e.fillStyle = i(r.tail);
-		Kp(e, -20, 24, 40, 10, 4);
+		traceHudRoundedRect(e, -20, 24, 40, 10, 4);
 		e.fill();
 		e.stroke();
 		e.restore();
@@ -288,15 +288,16 @@ var Hud = class {
 		let r = this.g;
 		let i = this.w / 2 - t / 2;
 		let a = n + 12;
-		qp(r, i, a, t, 40);
-		e.player.forward(Up);
-		let o = (Math.atan2(Up.x, -Up.z) * 180) / Math.PI;
+		drawHudPanel(r, i, a, t, 40);
+		e.player.forward(hudForwardScratch);
+		let o =
+			(Math.atan2(hudForwardScratch.x, -hudForwardScratch.z) * 180) / Math.PI;
 		r.save();
-		Kp(r, i + 3, a + 3, t - 6, 34, 10);
+		traceHudRoundedRect(r, i + 3, a + 3, t - 6, 34, 10);
 		r.clip();
 		let s = t / 120;
-		r.fillStyle = Q;
-		r.strokeStyle = Q;
+		r.fillStyle = HUD_OUTLINE_COLOR;
+		r.strokeStyle = HUD_OUTLINE_COLOR;
 		r.textAlign = `center`;
 		for (let e = Math.floor((o - 70) / 15) * 15; e <= o + 70; e += 15) {
 			let t = this.w / 2 + (e - o) * s;
@@ -319,7 +320,7 @@ var Hud = class {
 			r.lineTo(t, a + (i ? 24 : 27));
 			r.stroke();
 			if (i) {
-				r.font = `800 ${i.length === 1 ? 16 : 12}px ${Vp}`;
+				r.font = `800 ${i.length === 1 ? 16 : 12}px ${HUD_FONT_FAMILY}`;
 				r.fillText(i, t, a + 20);
 			}
 		}
@@ -339,12 +340,12 @@ var Hud = class {
 			r.fill();
 		};
 		let l = e.world.gen.nearestAirfield(e.player.s.pos.x, e.player.s.pos.z).af;
-		c(new Vector3(l.x, 0, l.z), Rp);
+		c(new Vector3(l.x, 0, l.z), HUD_SUCCESS_COLOR);
 		if (e.guide) {
-			c(new Vector3(e.guide.dest.x, 0, e.guide.dest.z), zp);
+			c(new Vector3(e.guide.dest.x, 0, e.guide.dest.z), HUD_ACCENT_COLOR);
 		}
 		r.restore();
-		r.fillStyle = Q;
+		r.fillStyle = HUD_OUTLINE_COLOR;
 		r.beginPath();
 		r.moveTo(this.w / 2, a + 38);
 		r.lineTo(this.w / 2 - 7, a + 46);
@@ -355,14 +356,14 @@ var Hud = class {
 	}
 	drawRejoin(e, t) {
 		let n = this.g;
-		Hp.copy(e).applyMatrix4(t.matrixWorldInverse);
-		let r = Hp.z > 0;
+		hudProjectionScratch.copy(e).applyMatrix4(t.matrixWorldInverse);
+		let r = hudProjectionScratch.z > 0;
 		let i = this.project(e, t);
 		let a =
 			!r && i.x > 60 && i.x < this.w - 60 && i.y > 60 && i.y < this.h - 60;
 		n.save();
 		n.lineWidth = 3;
-		n.strokeStyle = Q;
+		n.strokeStyle = HUD_OUTLINE_COLOR;
 		n.fillStyle = `#ffffff`;
 		if (a) {
 			n.beginPath();
@@ -371,17 +372,17 @@ var Hud = class {
 			n.stroke();
 			n.beginPath();
 			n.arc(i.x, i.y, 4, 0, Math.PI * 2);
-			n.fillStyle = Q;
+			n.fillStyle = HUD_OUTLINE_COLOR;
 			n.fill();
-			n.font = `800 13px ${Vp}`;
+			n.font = `800 13px ${HUD_FONT_FAMILY}`;
 			n.textAlign = `center`;
 			n.lineWidth = 4;
 			n.strokeStyle = `#ffffff`;
 			n.strokeText(`PATH`, i.x, i.y - 20);
 			n.fillText(`PATH`, i.x, i.y - 20);
 		} else {
-			let e = Hp.x;
-			let t = -Hp.y;
+			let e = hudProjectionScratch.x;
+			let t = -hudProjectionScratch.y;
 			if (r && Math.abs(e) < 0.001 && Math.abs(t) < 0.001) {
 				t = 1;
 			}
@@ -412,7 +413,7 @@ var Hud = class {
 		let t = this.g;
 		let n = ((e.mouse.x + 1) / 2) * this.w;
 		let r = ((1 - e.mouse.y) / 2) * this.h;
-		t.strokeStyle = Rp;
+		t.strokeStyle = HUD_SUCCESS_COLOR;
 		t.lineWidth = 2.5;
 		t.beginPath();
 		t.arc(n, r, 8, 0, Math.PI * 2);
@@ -443,8 +444,8 @@ var Hud = class {
 		let s = new Vector3(r.x, r.height + 1, r.z);
 		let c = this.project(s, a);
 		if (!c.behind) {
-			t.fillStyle = Rp;
-			t.strokeStyle = Q;
+			t.fillStyle = HUD_SUCCESS_COLOR;
+			t.strokeStyle = HUD_OUTLINE_COLOR;
 			t.lineWidth = 2.5;
 			t.beginPath();
 			t.moveTo(c.x, c.y - 8);
@@ -453,17 +454,17 @@ var Hud = class {
 			t.closePath();
 			t.fill();
 			t.stroke();
-			t.font = `800 12px ${Vp}`;
+			t.font = `800 12px ${HUD_FONT_FAMILY}`;
 			t.textAlign = `center`;
-			t.fillStyle = Q;
+			t.fillStyle = HUD_OUTLINE_COLOR;
 			t.fillText(`STRIP`, c.x, c.y - 30);
 			t.textAlign = `left`;
 		}
 		for (let e of o) {
 			let n = this.project(e, a);
 			if (!n.behind) {
-				t.fillStyle = Lp;
-				t.strokeStyle = Q;
+				t.fillStyle = HUD_PANEL_COLOR;
+				t.strokeStyle = HUD_OUTLINE_COLOR;
 				t.lineWidth = 2;
 				t.beginPath();
 				t.arc(n.x, n.y, 4, 0, Math.PI * 2);
@@ -478,13 +479,14 @@ var Hud = class {
 		if (u < 2200 && !n.onGround) {
 			let e = f > 25 ? `HIGH ▼` : f < -18 ? `LOW ▲` : `ON SLOPE ●`;
 			let r = -n.vel.y;
-			t.font = `800 15px ${Vp}`;
+			t.font = `800 15px ${HUD_FONT_FAMILY}`;
 			let i = `${e}   sink ${r.toFixed(1)} m/s`;
 			let a = t.measureText(i).width + 24;
 			let o = this.clusterTop - 44;
 			let s = this.clusterCx;
-			qp(t, s - a / 2, o, a, 30);
-			t.fillStyle = r > 3.4499999999999997 ? Bp : Q;
+			drawHudPanel(t, s - a / 2, o, a, 30);
+			t.fillStyle =
+				r > 3.4499999999999997 ? HUD_WARNING_COLOR : HUD_OUTLINE_COLOR;
 			t.textAlign = `center`;
 			t.fillText(i, s, o + 21);
 			t.textAlign = `left`;
@@ -542,9 +544,9 @@ var Hud = class {
 		let a = this.g;
 		let o = this.w - r - t - 16;
 		let s = n + 46;
-		qp(a, o, s, t, t);
+		drawHudPanel(a, o, s, t, t);
 		a.save();
-		Kp(a, o + 3, s + 3, t - 6, t - 6, 10);
+		traceHudRoundedRect(a, o + 3, s + 3, t - 6, t - 6, 10);
 		a.clip();
 		let c = t / this.miniSpan;
 		let l = (this.miniAt.x - i.pos.x) * c;
@@ -567,7 +569,7 @@ var Hud = class {
 				}
 			}
 			a.lineJoin = `round`;
-			a.strokeStyle = Q;
+			a.strokeStyle = HUD_OUTLINE_COLOR;
 			a.lineWidth = 4;
 			a.stroke();
 			a.strokeStyle = `#ffffff`;
@@ -579,21 +581,26 @@ var Hud = class {
 			a.save();
 			a.translate(n.x, n.y);
 			a.rotate(t.heading);
-			a.fillStyle = e.guide?.dest === t ? zp : t.home ? Rp : `#ffffff`;
-			a.strokeStyle = Q;
+			a.fillStyle =
+				e.guide?.dest === t
+					? HUD_ACCENT_COLOR
+					: t.home
+						? HUD_SUCCESS_COLOR
+						: `#ffffff`;
+			a.strokeStyle = HUD_OUTLINE_COLOR;
 			a.lineWidth = 1.5;
 			a.fillRect(-7, -2.5, 14, 5);
 			a.strokeRect(-7, -2.5, 14, 5);
 			a.restore();
 		}
 		a.restore();
-		e.player.forward(Up);
-		let f = Math.atan2(Up.z, Up.x);
+		e.player.forward(hudForwardScratch);
+		let f = Math.atan2(hudForwardScratch.z, hudForwardScratch.x);
 		a.save();
 		a.translate(o + t / 2, s + t / 2);
 		a.rotate(f);
-		a.fillStyle = zp;
-		a.strokeStyle = Q;
+		a.fillStyle = HUD_ACCENT_COLOR;
+		a.strokeStyle = HUD_OUTLINE_COLOR;
 		a.lineWidth = 2;
 		a.beginPath();
 		a.moveTo(9, 0);
@@ -604,8 +611,8 @@ var Hud = class {
 		a.fill();
 		a.stroke();
 		a.restore();
-		a.font = `800 11px ${Vp}`;
-		a.fillStyle = Q;
+		a.font = `800 11px ${HUD_FONT_FAMILY}`;
+		a.fillStyle = HUD_OUTLINE_COLOR;
 		a.fillText(`N`, o + t / 2 - 4, s + 15);
 	}
 	drawTouchStatus(e, t) {
@@ -615,18 +622,18 @@ var Hud = class {
 		let a = r.buttons.pause;
 		let o = r.safe.l + r.u * 12;
 		let s = a.y + a.r + r.u * 10;
-		qp(n, o, s, 158, 84);
+		drawHudPanel(n, o, s, 158, 84);
 		let c = i.pos.y - Math.max(e.world.groundHeight(i.pos.x, i.pos.z), 0);
-		let l = (e, t, r, i, a = Q) => {
-			n.fillStyle = Q;
-			n.font = `800 12px ${Vp}`;
+		let l = (e, t, r, i, a = HUD_OUTLINE_COLOR) => {
+			n.fillStyle = HUD_OUTLINE_COLOR;
+			n.font = `800 12px ${HUD_FONT_FAMILY}`;
 			n.fillText(e, o + 10, i);
 			n.fillStyle = a;
-			n.font = `800 18px ${Vp}`;
+			n.font = `800 18px ${HUD_FONT_FAMILY}`;
 			n.fillText(t, o + 42, i + 1);
 			let s = n.measureText(t).width;
-			n.fillStyle = Q;
-			n.font = `700 11px ${Vp}`;
+			n.fillStyle = HUD_OUTLINE_COLOR;
+			n.font = `700 11px ${HUD_FONT_FAMILY}`;
 			n.fillText(r, o + 42 + s + 4, i + 1);
 		};
 		l(
@@ -634,15 +641,15 @@ var Hud = class {
 			`${Math.round(i.airspeed * 3.6)}`,
 			`km/h`,
 			s + 22,
-			e.stallWarn ? Bp : Q,
+			e.stallWarn ? HUD_WARNING_COLOR : HUD_OUTLINE_COLOR,
 		);
 		l(`ALT`, `${Math.round(i.pos.y)}`, `m · ${Math.round(c)} AGL`, s + 45);
-		n.font = `800 12px ${Vp}`;
+		n.font = `800 12px ${HUD_FONT_FAMILY}`;
 		if (e.stallWarn) {
-			n.fillStyle = Bp;
+			n.fillStyle = HUD_WARNING_COLOR;
 			n.fillText(`STALL!`, o + 10, s + 70);
 		} else if (i.flapsBlown) {
-			n.fillStyle = Bp;
+			n.fillStyle = HUD_WARNING_COLOR;
 			n.fillText(`TOO FAST for flaps!`, o + 10, s + 70);
 		} else {
 			n.fillStyle = `#6b4b2a`;
@@ -658,7 +665,8 @@ var Hud = class {
 		let n = this.g;
 		let r = t.layout;
 		let i = r.u;
-		let a = (e) => `800 ${Math.max(11, Math.round(e * i))}px ${Vp}`;
+		let a = (e) =>
+			`800 ${Math.max(11, Math.round(e * i))}px ${HUD_FONT_FAMILY}`;
 		n.save();
 		n.lineJoin = `round`;
 		let o = t.stick;
@@ -671,7 +679,7 @@ var Hud = class {
 		n.fillStyle = `rgba(255, 246, 221, 0.28)`;
 		n.fill();
 		n.lineWidth = 3;
-		n.strokeStyle = Q;
+		n.strokeStyle = HUD_OUTLINE_COLOR;
 		n.stroke();
 		n.lineWidth = 2.5;
 		for (let e = 0; e < 4; e++) {
@@ -685,12 +693,12 @@ var Hud = class {
 		let d = l + (o ? o.y * s : 0);
 		n.beginPath();
 		n.arc(u, d, s * 0.42, 0, Math.PI * 2);
-		n.fillStyle = o ? zp : `rgba(255, 246, 221, 0.85)`;
+		n.fillStyle = o ? HUD_ACCENT_COLOR : `rgba(255, 246, 221, 0.85)`;
 		n.fill();
 		n.lineWidth = 3;
 		n.stroke();
 		if (!o) {
-			n.fillStyle = Q;
+			n.fillStyle = HUD_OUTLINE_COLOR;
 			n.font = a(11);
 			n.textAlign = `center`;
 			n.fillText(t.tilt ? `TILT` : `FLY`, u, d + i * 4);
@@ -700,7 +708,7 @@ var Hud = class {
 		let f = r.lever;
 		let p = t.held(`lever`);
 		n.globalAlpha = p ? 0.95 : 0.8;
-		Kp(n, f.x, f.y, f.w, f.h, i * 12);
+		traceHudRoundedRect(n, f.x, f.y, f.w, f.h, i * 12);
 		n.fillStyle = `rgba(255, 246, 221, 0.55)`;
 		n.fill();
 		n.save();
@@ -712,9 +720,9 @@ var Hud = class {
 		n.fillStyle = `rgba(224, 79, 58, 0.85)`;
 		n.fillRect(f.x + f.w - i * 7, f.y + f.h - f.h * h, i * 4, f.h * h);
 		n.restore();
-		Kp(n, f.x, f.y, f.w, f.h, i * 12);
+		traceHudRoundedRect(n, f.x, f.y, f.w, f.h, i * 12);
 		n.lineWidth = 3;
-		n.strokeStyle = Q;
+		n.strokeStyle = HUD_OUTLINE_COLOR;
 		n.stroke();
 		n.lineWidth = 1.5;
 		for (let e of [0.25, 0.5, 0.75]) {
@@ -726,17 +734,17 @@ var Hud = class {
 		}
 		let g = f.y + f.h * (1 - t.throttle);
 		let _ = i * 24;
-		Kp(n, f.x - i * 6, g - _ / 2, f.w + i * 12, _, i * 8);
-		n.fillStyle = p ? zp : Lp;
+		traceHudRoundedRect(n, f.x - i * 6, g - _ / 2, f.w + i * 12, _, i * 8);
+		n.fillStyle = p ? HUD_ACCENT_COLOR : HUD_PANEL_COLOR;
 		n.fill();
 		n.lineWidth = 3;
 		n.stroke();
-		n.fillStyle = Q;
+		n.fillStyle = HUD_OUTLINE_COLOR;
 		n.font = a(12);
 		n.textAlign = `center`;
 		n.fillText(`${Math.round(t.throttle * 100)}%`, f.x + f.w / 2, g + i * 4.5);
 		n.font = a(10);
-		let v = df(e.player.loadout.style);
+		let v = getPlaneEngineKind(e.player.loadout.style);
 		let y = t.throttle < 0.6;
 		n.fillText(
 			v === `jet` ? `${Math.round(h * 100)}` : `THR`,
@@ -753,10 +761,10 @@ var Hud = class {
 		n.textAlign = `center`;
 		let S = (b.flapsLess.y + b.flapsMore.y) / 2 + i * 4;
 		n.lineWidth = 4;
-		n.strokeStyle = Lp;
+		n.strokeStyle = HUD_PANEL_COLOR;
 		let C = x ? `TOO FAST` : FLAP_LABELS[e.flapNotch];
 		n.strokeText(C, b.flapsMore.x, S);
-		n.fillStyle = x ? Bp : Q;
+		n.fillStyle = x ? HUD_WARNING_COLOR : HUD_OUTLINE_COLOR;
 		n.fillText(C, b.flapsMore.x, S);
 		n.textAlign = `left`;
 		this.touchButton(b.brake, `BRAKE`, t.held(`brake`), a(13));
@@ -773,13 +781,13 @@ var Hud = class {
 					-Math.PI / 2 + t.bailProgress * Math.PI * 2,
 				);
 				n.lineWidth = i * 5;
-				n.strokeStyle = Bp;
+				n.strokeStyle = HUD_WARNING_COLOR;
 				n.stroke();
 			}
 		}
 		let w = b.pause;
 		this.touchButton(w, ``, t.held(`pause`), a(11));
-		n.fillStyle = Q;
+		n.fillStyle = HUD_OUTLINE_COLOR;
 		n.fillRect(w.x - w.r * 0.32, w.y - w.r * 0.38, w.r * 0.22, w.r * 0.76);
 		n.fillRect(w.x + w.r * 0.1, w.y - w.r * 0.38, w.r * 0.22, w.r * 0.76);
 		n.restore();
@@ -792,13 +800,13 @@ var Hud = class {
 		a.fill();
 		a.beginPath();
 		a.arc(e.x + (n ? 2 : 0), e.y + (n ? 2 : 0), e.r, 0, Math.PI * 2);
-		a.fillStyle = n ? Rp : i;
+		a.fillStyle = n ? HUD_SUCCESS_COLOR : i;
 		a.fill();
 		a.lineWidth = 3;
-		a.strokeStyle = Q;
+		a.strokeStyle = HUD_OUTLINE_COLOR;
 		a.stroke();
 		if (t) {
-			a.fillStyle = n ? `#fff` : Q;
+			a.fillStyle = n ? `#fff` : HUD_OUTLINE_COLOR;
 			a.font = r;
 			a.textAlign = `center`;
 			a.textBaseline = `middle`;
@@ -808,5 +816,18 @@ var Hud = class {
 		}
 	}
 };
-
-export { Bp, Gp, Hp, Hud, Kp, Lp, Q, Rp, Up, Vp, Wp, qp, zp };
+export {
+	HUD_WARNING_COLOR,
+	hudRightScratch,
+	hudProjectionScratch,
+	Hud,
+	traceHudRoundedRect,
+	HUD_PANEL_COLOR,
+	HUD_OUTLINE_COLOR,
+	HUD_SUCCESS_COLOR,
+	hudForwardScratch,
+	HUD_FONT_FAMILY,
+	hudUpScratch,
+	drawHudPanel,
+	HUD_ACCENT_COLOR,
+};

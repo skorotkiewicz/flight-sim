@@ -9,17 +9,16 @@ import {
 	ShapeGeometry,
 	Vector3,
 } from "../core/three.js";
-
-var zf = new Vector3();
-var Bf = new Vector3();
-function Vf(e) {
-	zf.set(1, 0, 0).applyQuaternion(e.quat);
-	Bf.set(0, 1, 0).applyQuaternion(e.quat);
-	return Math.atan2(zf.y, Bf.y);
+var pathGuideBankRight = new Vector3();
+var pathGuideBankUp = new Vector3();
+function getFlightBankAngle(e) {
+	pathGuideBankRight.set(1, 0, 0).applyQuaternion(e.quat);
+	pathGuideBankUp.set(0, 1, 0).applyQuaternion(e.quat);
+	return Math.atan2(pathGuideBankRight.y, pathGuideBankUp.y);
 }
-var Hf = 120;
-var Uf = 3600;
-var Wf = (Math.PI * 55) / 180;
+var PATH_GUIDE_ARROW_SPACING = 120;
+var PATH_GUIDE_VISIBLE_DISTANCE = 3600;
+var PATH_GUIDE_ARROW_TILT = (Math.PI * 55) / 180;
 var CONTRAIL_SHADER = `
   attribute float aS;
   varying float vS;
@@ -31,7 +30,7 @@ var CONTRAIL_SHADER = `
     gl_Position = projectionMatrix * viewMatrix * wp;
   }
 `;
-var Kf = `
+var PATH_GUIDE_FRAGMENT_SHADER = `
   uniform float uProgress;
   uniform float uAhead;
   uniform float uTime;
@@ -49,7 +48,7 @@ var Kf = `
     gl_FragColor = vec4(uColor, a);
   }
 `;
-function qf(e = 1) {
+function createPathGuideArrowGeometry(e = 1) {
 	let t = new Shape();
 	t.moveTo(0, 3.2);
 	t.lineTo(7, -3.6);
@@ -63,19 +62,19 @@ function qf(e = 1) {
 	n.scale(e, e, 1);
 	n.translate(0, -1.6, 0);
 	n.rotateX(Math.PI / 2);
-	n.rotateX(-Wf);
+	n.rotateX(-PATH_GUIDE_ARROW_TILT);
 	return n;
 }
-function Jf(e, t) {
+function createPathGuideMaterial(e, t) {
 	return new ShaderMaterial({
 		vertexShader: CONTRAIL_SHADER,
-		fragmentShader: Kf,
+		fragmentShader: PATH_GUIDE_FRAGMENT_SHADER,
 		uniforms: {
 			uProgress: {
 				value: 0,
 			},
 			uAhead: {
-				value: Uf,
+				value: PATH_GUIDE_VISIBLE_DISTANCE,
 			},
 			uTime: {
 				value: 0,
@@ -92,7 +91,7 @@ function Jf(e, t) {
 		side: 2,
 	});
 }
-var Yf = class {
+var FlightPathGuide = class {
 	mesh = new Group();
 	mats = [];
 	geos = [];
@@ -100,7 +99,7 @@ var Yf = class {
 	constructor(e) {
 		let t = e.pts;
 		let n = [];
-		for (let t = 60; t < e.sAim + 100; t += Hf) {
+		for (let t = 60; t < e.sAim + 100; t += PATH_GUIDE_ARROW_SPACING) {
 			n.push(t);
 		}
 		let r = n.length;
@@ -109,8 +108,8 @@ var Yf = class {
 			[1.14, 2825498, 0.3, 4],
 			[1, 16777215, 0.8, 5],
 		]) {
-			let a = qf(e);
-			let o = Jf(t, n);
+			let a = createPathGuideArrowGeometry(e);
+			let o = createPathGuideMaterial(t, n);
 			let s = new InstancedMesh(a, o, r);
 			s.frustumCulled = false;
 			s.renderOrder = i;
@@ -174,5 +173,16 @@ var Yf = class {
 		}
 	}
 };
-
-export { Bf, CONTRAIL_SHADER, Hf, Jf, Kf, Uf, Vf, Wf, Yf, qf, zf };
+export {
+	pathGuideBankUp,
+	CONTRAIL_SHADER,
+	PATH_GUIDE_ARROW_SPACING,
+	createPathGuideMaterial,
+	PATH_GUIDE_FRAGMENT_SHADER,
+	PATH_GUIDE_VISIBLE_DISTANCE,
+	getFlightBankAngle,
+	PATH_GUIDE_ARROW_TILT,
+	FlightPathGuide,
+	createPathGuideArrowGeometry,
+	pathGuideBankRight,
+};

@@ -1,4 +1,8 @@
-import { Md, Rd, Vd } from "./meshkit.js";
+import {
+	addOutlineNormals,
+	createOutlineMaterial,
+	createToonMaterial,
+} from "./meshkit.js";
 import {
 	CanvasTexture,
 	Color,
@@ -16,14 +20,13 @@ import {
 	SpriteMaterial,
 	Vector3,
 } from "../core/three.js";
-
-var Hd = 1800;
-var Ud = 500;
-var Wd = new Matrix4();
-var Gd = new Quaternion();
-var Kd = new Vector3();
-var qd = new Vector3();
-var Jd = new Color();
+var PUFF_PARTICLE_CAPACITY = 1800;
+var SPARK_PARTICLE_CAPACITY = 500;
+var particleTransform = new Matrix4();
+var particleQuaternion = new Quaternion();
+var particlePosition = new Vector3();
+var particleScale = new Vector3();
+var particleColor = new Color();
 var ParticleSystem = class {
 	cap;
 	px;
@@ -74,10 +77,10 @@ var ParticleSystem = class {
 		this.drag[c] = o;
 		this.rise[c] = s;
 		this.rot[c] = Math.random() * 6.28;
-		Jd.setHex(a);
-		this.col[c * 3] = Jd.r;
-		this.col[c * 3 + 1] = Jd.g;
-		this.col[c * 3 + 2] = Jd.b;
+		particleColor.setHex(a);
+		this.col[c * 3] = particleColor.r;
+		this.col[c * 3 + 1] = particleColor.g;
+		this.col[c * 3 + 2] = particleColor.b;
 	}
 	remove(e) {
 		let t = --this.n;
@@ -115,7 +118,7 @@ var ParticleSystem = class {
 		}
 	}
 };
-function Xd() {
+function createPowTexture() {
 	let e = document.createElement(`canvas`);
 	e.width = e.height = 256;
 	let t = e.getContext(`2d`);
@@ -145,10 +148,10 @@ function Xd() {
 	n.colorSpace = SRGBColorSpace;
 	return n;
 }
-var Zd = class {
+var FlightEffects = class {
 	group = new Group();
-	puffs = new ParticleSystem(Hd);
-	sparks = new ParticleSystem(Ud);
+	puffs = new ParticleSystem(PUFF_PARTICLE_CAPACITY);
+	sparks = new ParticleSystem(SPARK_PARTICLE_CAPACITY);
 	puffMesh;
 	puffOutline;
 	sparkMesh;
@@ -156,19 +159,23 @@ var Zd = class {
 	tmpV = new Vector3();
 	constructor() {
 		let e = new IcosahedronGeometry(1, 0);
-		Md(e);
+		addOutlineNormals(e);
 		this.puffMesh = new InstancedMesh(
 			e,
-			Vd({
+			createToonMaterial({
 				color: 16777215,
 				rim: 0.1,
 			}),
-			Hd,
+			PUFF_PARTICLE_CAPACITY,
 		);
 		this.puffMesh.count = 0;
 		this.puffMesh.frustumCulled = false;
 		this.puffMesh.setColorAt(0, new Color(1, 1, 1));
-		this.puffOutline = new InstancedMesh(e, Rd(2825498, 0.8, 250), Hd);
+		this.puffOutline = new InstancedMesh(
+			e,
+			createOutlineMaterial(2825498, 0.8, 250),
+			PUFF_PARTICLE_CAPACITY,
+		);
 		this.puffOutline.instanceMatrix = this.puffMesh.instanceMatrix;
 		this.puffOutline.count = 0;
 		this.puffOutline.frustumCulled = false;
@@ -177,13 +184,13 @@ var Zd = class {
 			new MeshBasicMaterial({
 				color: 16777215,
 			}),
-			Ud,
+			SPARK_PARTICLE_CAPACITY,
 		);
 		this.sparkMesh.count = 0;
 		this.sparkMesh.frustumCulled = false;
 		this.sparkMesh.setColorAt(0, new Color(1, 1, 1));
 		this.group.add(this.puffMesh, this.puffOutline, this.sparkMesh);
-		let t = Xd();
+		let t = createPowTexture();
 		for (let e = 0; e < 6; e++) {
 			let e = new Sprite(
 				new SpriteMaterial({
@@ -319,17 +326,21 @@ var Zd = class {
 			let a =
 				(e.s0[r] + (e.s1[r] - e.s0[r]) * Math.sqrt(i)) *
 				(i > 0.7 ? 1 - (i - 0.7) / 0.3 : 1);
-			Kd.set(e.px[r], e.py[r], e.pz[r]);
-			let o = Kd.distanceTo(n);
+			particlePosition.set(e.px[r], e.py[r], e.pz[r]);
+			let o = particlePosition.distanceTo(n);
 			if (o < a * 2.5 + 1) {
 				a *= MathUtils.clamp((o - 1) / (a * 2.5), 0, 1);
 			}
-			Gd.setFromAxisAngle(Object3D.DEFAULT_UP, e.rot[r]);
-			qd.setScalar(Math.max(a, 0.001));
-			Wd.compose(Kd, Gd, qd);
-			t.setMatrixAt(r, Wd);
-			Jd.setRGB(e.col[r * 3], e.col[r * 3 + 1], e.col[r * 3 + 2]);
-			t.setColorAt(r, Jd);
+			particleQuaternion.setFromAxisAngle(Object3D.DEFAULT_UP, e.rot[r]);
+			particleScale.setScalar(Math.max(a, 0.001));
+			particleTransform.compose(
+				particlePosition,
+				particleQuaternion,
+				particleScale,
+			);
+			t.setMatrixAt(r, particleTransform);
+			particleColor.setRGB(e.col[r * 3], e.col[r * 3 + 1], e.col[r * 3 + 2]);
+			t.setColorAt(r, particleColor);
 		}
 		t.count = e.n;
 		t.instanceMatrix.needsUpdate = true;
@@ -338,5 +349,15 @@ var Zd = class {
 		}
 	}
 };
-
-export { Gd, Hd, Jd, Kd, ParticleSystem, Ud, Wd, Xd, Zd, qd };
+export {
+	particleQuaternion,
+	PUFF_PARTICLE_CAPACITY,
+	particleColor,
+	particlePosition,
+	ParticleSystem,
+	SPARK_PARTICLE_CAPACITY,
+	particleTransform,
+	createPowTexture,
+	FlightEffects,
+	particleScale,
+};

@@ -1,16 +1,16 @@
-var Zm = Math.tan((Math.PI * 4) / 180);
-var Qm = 0.08;
-var $m = 20;
-var eh = 350;
-var th = 800;
-var nh = 3000;
-var rh = 150;
-var ih = 350;
-var ah = 2.5;
-var oh = 120;
-var sh = 60;
-var ch = 200;
-function lh(e, t) {
+var ROUTE_GLIDE_SLOPE = Math.tan((Math.PI * 4) / 180);
+var ROUTE_CLIMB_SLOPE = 0.08;
+var ROUTE_SAMPLE_SPACING = 20;
+var ROUTE_LIFTOFF_DISTANCE = 350;
+var ROUTE_DEPARTURE_EXTENSION = 800;
+var ROUTE_FINAL_APPROACH_LENGTH = 3000;
+var ROUTE_TOUCHDOWN_OFFSET = 150;
+var ROUTE_LANDING_ROLLOUT = 350;
+var ROUTE_RUNWAY_ALTITUDE_OFFSET = 2.5;
+var ROUTE_PREFERRED_TERRAIN_CLEARANCE = 120;
+var ROUTE_MINIMUM_CLEARANCE_CAP = 60;
+var ROUTE_CRUISE_HEIGHT_OFFSET = 200;
+function chooseUpwindRunwayDirection(e, t) {
 	if (t.x * e.dirX + t.z * e.dirZ > 0) {
 		return {
 			dx: -e.dirX,
@@ -23,7 +23,7 @@ function lh(e, t) {
 		};
 	}
 }
-var uh = [
+var COMPASS_DIRECTION_NAMES = [
 	`North`,
 	`Northeast`,
 	`East`,
@@ -33,17 +33,17 @@ var uh = [
 	`West`,
 	`Northwest`,
 ];
-function dh(e, t, n, r) {
+function bearingBetweenPoints(e, t, n, r) {
 	return ((Math.atan2(n - e, -(r - t)) * 180) / Math.PI + 360) % 360;
 }
-function fh(e) {
+function nameAirfields(e) {
 	let t = e[0];
 	let n = e.map((e, n) => {
 		if (n === 0) {
 			return `Home Field`;
 		}
-		let r = dh(t.x, t.z, e.x, e.z);
-		return `${uh[Math.round(r / 45) % 8]} Field`;
+		let r = bearingBetweenPoints(t.x, t.z, e.x, e.z);
+		return `${COMPASS_DIRECTION_NAMES[Math.round(r / 45) % 8]} Field`;
 	});
 	for (let r = 1; r < n.length; r++) {
 		for (let i = r + 1; i < n.length; i++) {
@@ -61,19 +61,20 @@ function fh(e) {
 	}
 	return n;
 }
-var ph = {
+var PLANE_ROUTE_TURN_RADII = {
 	biplane: 700,
 	turboprop: 1000,
 	jet: 1500,
 };
-var mh = {
+var PLANE_ROUTE_CRUISE_SPEEDS = {
 	biplane: 44,
 	turboprop: 72,
 	jet: 115,
 };
-var hh = Math.PI * 2;
-var gh = (e) => ((e % hh) + hh) % hh;
-function _h(e, t, n) {
+var ROUTE_FULL_TURN = Math.PI * 2;
+var normalizeRouteAngle = (e) =>
+	((e % ROUTE_FULL_TURN) + ROUTE_FULL_TURN) % ROUTE_FULL_TURN;
+function solveDubinsCandidates(e, t, n) {
 	let r = Math.sin(e);
 	let i = Math.sin(t);
 	let a = Math.cos(e);
@@ -84,14 +85,24 @@ function _h(e, t, n) {
 		let l = 2 + n * n - s * 2 + n * 2 * (r - i);
 		if (l >= 0) {
 			let s = Math.atan2(o - a, n + r - i);
-			c.push([[`L`, `S`, `L`], gh(-e + s), Math.sqrt(l), gh(t - s)]);
+			c.push([
+				[`L`, `S`, `L`],
+				normalizeRouteAngle(-e + s),
+				Math.sqrt(l),
+				normalizeRouteAngle(t - s),
+			]);
 		}
 	}
 	{
 		let l = 2 + n * n - s * 2 + n * 2 * (i - r);
 		if (l >= 0) {
 			let s = Math.atan2(a - o, n - r + i);
-			c.push([[`R`, `S`, `R`], gh(e - s), Math.sqrt(l), gh(-t + s)]);
+			c.push([
+				[`R`, `S`, `R`],
+				normalizeRouteAngle(e - s),
+				Math.sqrt(l),
+				normalizeRouteAngle(-t + s),
+			]);
 		}
 	}
 	{
@@ -99,7 +110,12 @@ function _h(e, t, n) {
 		if (l >= 0) {
 			let s = Math.sqrt(l);
 			let u = Math.atan2(-a - o, n + r + i) - Math.atan2(-2, s);
-			c.push([[`L`, `S`, `R`], gh(-e + u), s, gh(-t + u)]);
+			c.push([
+				[`L`, `S`, `R`],
+				normalizeRouteAngle(-e + u),
+				s,
+				normalizeRouteAngle(-t + u),
+			]);
 		}
 	}
 	{
@@ -107,12 +123,17 @@ function _h(e, t, n) {
 		if (l >= 0) {
 			let s = Math.sqrt(l);
 			let u = Math.atan2(a + o, n - r - i) - Math.atan2(2, s);
-			c.push([[`R`, `S`, `L`], gh(e - u), s, gh(t - u)]);
+			c.push([
+				[`R`, `S`, `L`],
+				normalizeRouteAngle(e - u),
+				s,
+				normalizeRouteAngle(t - u),
+			]);
 		}
 	}
 	return c;
 }
-function vh(e, t, n, r, i, a) {
+function sampleDubinsSegments(e, t, n, r, i, a) {
 	let { x: o, z: s, h: c } = e;
 	for (let e = 0; e < 3; e++) {
 		let l = n[e] * r;
@@ -139,20 +160,20 @@ function vh(e, t, n, r, i, a) {
 		h: c,
 	};
 }
-function yh(e, t, n, r = $m) {
+function buildDubinsPath(e, t, n, r = ROUTE_SAMPLE_SPACING) {
 	let i = t.x - e.x;
 	let a = t.z - e.z;
 	let o = Math.hypot(i, a) / n;
 	let s = Math.atan2(a, i);
-	let c = gh(e.h - s);
-	let l = gh(t.h - s);
+	let c = normalizeRouteAngle(e.h - s);
+	let l = normalizeRouteAngle(t.h - s);
 	let u = null;
-	for (let [r, i, a, s] of _h(c, l, o)) {
+	for (let [r, i, a, s] of solveDubinsCandidates(c, l, o)) {
 		let o = i + a + s;
 		if (u && o >= u.len) {
 			continue;
 		}
-		let c = vh(e, r, [i, a, s], n, 50);
+		let c = sampleDubinsSegments(e, r, [i, a, s], n, 50);
 		if (
 			!(Math.hypot(c.x - t.x, c.z - t.z) > 2) &&
 			!(Math.abs(Math.sin((c.h - t.h) / 2)) > 0.01)
@@ -175,7 +196,7 @@ function yh(e, t, n, r = $m) {
 		}
 		return d;
 	}
-	vh(e, u.word, u.lens, n, r, (e, t) =>
+	sampleDubinsSegments(e, u.word, u.lens, n, r, (e, t) =>
 		d.push({
 			x: e,
 			z: t,
@@ -187,14 +208,14 @@ function yh(e, t, n, r = $m) {
 	};
 	return d;
 }
-function bh(e, t, n, r, i = 700) {
-	let a = lh(t, r);
-	let o = lh(n, r);
+function planFlightRoute(e, t, n, r, i = 700) {
+	let a = chooseUpwindRunwayDirection(t, r);
+	let o = chooseUpwindRunwayDirection(n, r);
 	let s = (e) => ({
 		dx: -e.dx,
 		dz: -e.dz,
 	});
-	let c = Math.hypot(r.x, r.z) * xh;
+	let c = Math.hypot(r.x, r.z) * ROUTE_TAILWIND_PENALTY;
 	let l = null;
 	for (let [r, u] of [
 		[a, 0],
@@ -204,13 +225,14 @@ function bh(e, t, n, r, i = 700) {
 			[o, 0],
 			[s(o), c],
 		]) {
-			for (let o of [th, 300]) {
-				let s = Sh(e, t, n, r, a, o, i);
+			for (let o of [ROUTE_DEPARTURE_EXTENSION, 300]) {
+				let s = buildRouteCandidate(e, t, n, r, a, o, i);
 				let c =
 					s.violation * 40000 +
 					(Math.max(0, s.r.climb - 0.1) + Math.max(0, s.r.glide - 0.1)) *
 						400000;
-				let f = s.r.length + u + d + (o === th ? 0 : 300) + c;
+				let f =
+					s.r.length + u + d + (o === ROUTE_DEPARTURE_EXTENSION ? 0 : 300) + c;
 				if (!l || f < l.score) {
 					l = {
 						r: s.r,
@@ -222,12 +244,15 @@ function bh(e, t, n, r, i = 700) {
 	}
 	return l.r;
 }
-var xh = 1800;
-function Sh(e, t, n, r, i, a, o) {
+var ROUTE_TAILWIND_PENALTY = 1800;
+function buildRouteCandidate(e, t, n, r, i, a, o) {
 	let s = (t, n) => Math.max(e.height(t, n), 0);
 	let c = [];
 	let l = (e, t, n, r, i) => {
-		let a = Math.max(1, Math.ceil(Math.hypot(n - e, r - t) / $m));
+		let a = Math.max(
+			1,
+			Math.ceil(Math.hypot(n - e, r - t) / ROUTE_SAMPLE_SPACING),
+		);
 		for (let o = +!i; o <= a; o++) {
 			c.push({
 				x: e + ((n - e) * o) / a,
@@ -242,12 +267,12 @@ function Sh(e, t, n, r, i, a, o) {
 	let m = t.z + r.dz * (t.paved / 2 + a);
 	let h = n.x - i.dx * (n.paved / 2);
 	let g = n.z - i.dz * (n.paved / 2);
-	let _ = h + i.dx * rh;
-	let v = g + i.dz * rh;
-	let y = _ - i.dx * nh;
-	let b = v - i.dz * nh;
+	let _ = h + i.dx * ROUTE_TOUCHDOWN_OFFSET;
+	let v = g + i.dz * ROUTE_TOUCHDOWN_OFFSET;
+	let y = _ - i.dx * ROUTE_FINAL_APPROACH_LENGTH;
+	let b = v - i.dz * ROUTE_FINAL_APPROACH_LENGTH;
 	l(d, f, p, m, true);
-	for (let e of yh(
+	for (let e of buildDubinsPath(
 		{
 			x: p,
 			z: m,
@@ -265,13 +290,19 @@ function Sh(e, t, n, r, i, a, o) {
 	let x = c.length - 1;
 	l(y, b, _, v, false);
 	let S = c.length - 1;
-	l(_, v, _ + i.dx * ih, v + i.dz * ih, false);
+	l(
+		_,
+		v,
+		_ + i.dx * ROUTE_LANDING_ROLLOUT,
+		v + i.dz * ROUTE_LANDING_ROLLOUT,
+		false,
+	);
 	let C = c.length;
 	let w = new Float64Array(C);
 	for (let e = 1; e < C; e++) {
 		w[e] = w[e - 1] + Math.hypot(c[e].x - c[e - 1].x, c[e].z - c[e - 1].z);
 	}
-	let T = eh;
+	let T = ROUTE_LIFTOFF_DISTANCE;
 	let E = w[S];
 	let D = w[x];
 	let O = new Float64Array(C);
@@ -291,7 +322,7 @@ function Sh(e, t, n, r, i, a, o) {
 		}
 		k[e] = o;
 	}
-	let A = Math.round(200 / $m);
+	let A = Math.round(200 / ROUTE_SAMPLE_SPACING);
 	let j = new Float64Array(C);
 	for (let e = 0; e < C; e++) {
 		let t = 0;
@@ -300,11 +331,11 @@ function Sh(e, t, n, r, i, a, o) {
 		}
 		j[e] = t;
 	}
-	let ee = t.height + ah;
-	let te = n.height + ah;
+	let ee = t.height + ROUTE_RUNWAY_ALTITUDE_OFFSET;
+	let te = n.height + ROUTE_RUNWAY_ALTITUDE_OFFSET;
 	let M = u + t.paved / 2;
-	let N = E - rh;
-	let P = Math.max(t.height, n.height) + ch;
+	let N = E - ROUTE_TOUCHDOWN_OFFSET;
+	let P = Math.max(t.height, n.height) + ROUTE_CRUISE_HEIGHT_OFFSET;
 	let ne = new Float64Array(C);
 	let re = new Float64Array(C);
 	for (let e = 0; e < C; e++) {
@@ -315,14 +346,18 @@ function Sh(e, t, n, r, i, a, o) {
 		} else {
 			let t =
 				w[e] > M && w[e] < N
-					? Math.min(sh, 10 + (w[e] - M) * Qm * 0.6, 10 + (N - w[e]) * Zm * 0.6)
+					? Math.min(
+							ROUTE_MINIMUM_CLEARANCE_CAP,
+							10 + (w[e] - M) * ROUTE_CLIMB_SLOPE * 0.6,
+							10 + (N - w[e]) * ROUTE_GLIDE_SLOPE * 0.6,
+						)
 					: 0;
 			ne[e] = O[e] + t;
-			re[e] = Math.max(ne[e], j[e] + oh, P);
+			re[e] = Math.max(ne[e], j[e] + ROUTE_PREFERRED_TERRAIN_CLEARANCE, P);
 		}
 	}
-	let ie = Qm;
-	let ae = Zm;
+	let ie = ROUTE_CLIMB_SLOPE;
+	let ae = ROUTE_GLIDE_SLOPE;
 	for (let e = 0; e < C; e++) {
 		if (w[e] > 351) {
 			ie = Math.max(ie, (ne[e] - ee) / (w[e] - T));
@@ -348,8 +383,8 @@ function Sh(e, t, n, r, i, a, o) {
 		return r;
 	};
 	let se = oe(ne, ie, ae);
-	let F = oe(re, Qm, Zm);
-	let ce = Math.round(300 / $m);
+	let F = oe(re, ROUTE_CLIMB_SLOPE, ROUTE_GLIDE_SLOPE);
+	let ce = Math.round(300 / ROUTE_SAMPLE_SPACING);
 	let le = [];
 	let ue = 0;
 	for (let e = 0; e < C; e++) {
@@ -371,7 +406,8 @@ function Sh(e, t, n, r, i, a, o) {
 			s: w[e],
 		});
 	}
-	let de = Math.max(0, ie - Qm) + Math.max(0, ae - Zm);
+	let de =
+		Math.max(0, ie - ROUTE_CLIMB_SLOPE) + Math.max(0, ae - ROUTE_GLIDE_SLOPE);
 	return {
 		r: {
 			from: t,
@@ -391,7 +427,7 @@ function Sh(e, t, n, r, i, a, o) {
 		violation: de,
 	};
 }
-function Ch(e, t, n) {
+function sampleRoutePosition(e, t, n) {
 	let r = e.pts;
 	if (t <= 0) {
 		return Object.assign(n, {
@@ -426,7 +462,7 @@ function Ch(e, t, n) {
 	n.z = o.z + (s.z - o.z) * c;
 	return n;
 }
-var wh = class {
+var RouteTracker = class {
 	route;
 	idx = 0;
 	progress = 0;
@@ -472,34 +508,33 @@ var wh = class {
 		return this.lateral < 150 && Math.abs(this.vertical) < 70;
 	}
 };
-
 export {
-	$m,
-	Ch,
-	Qm,
-	Sh,
-	Zm,
-	_h,
-	ah,
-	bh,
-	ch,
-	dh,
-	eh,
-	fh,
-	gh,
-	hh,
-	ih,
-	lh,
-	mh,
-	nh,
-	oh,
-	ph,
-	rh,
-	sh,
-	th,
-	uh,
-	vh,
-	wh,
-	xh,
-	yh,
+	ROUTE_SAMPLE_SPACING,
+	sampleRoutePosition,
+	ROUTE_CLIMB_SLOPE,
+	buildRouteCandidate,
+	ROUTE_GLIDE_SLOPE,
+	solveDubinsCandidates,
+	ROUTE_RUNWAY_ALTITUDE_OFFSET,
+	planFlightRoute,
+	ROUTE_CRUISE_HEIGHT_OFFSET,
+	bearingBetweenPoints,
+	ROUTE_LIFTOFF_DISTANCE,
+	nameAirfields,
+	normalizeRouteAngle,
+	ROUTE_FULL_TURN,
+	ROUTE_LANDING_ROLLOUT,
+	chooseUpwindRunwayDirection,
+	PLANE_ROUTE_CRUISE_SPEEDS,
+	ROUTE_FINAL_APPROACH_LENGTH,
+	ROUTE_PREFERRED_TERRAIN_CLEARANCE,
+	PLANE_ROUTE_TURN_RADII,
+	ROUTE_TOUCHDOWN_OFFSET,
+	ROUTE_MINIMUM_CLEARANCE_CAP,
+	ROUTE_DEPARTURE_EXTENSION,
+	COMPASS_DIRECTION_NAMES,
+	sampleDubinsSegments,
+	RouteTracker,
+	ROUTE_TAILWIND_PENALTY,
+	buildDubinsPath,
 };

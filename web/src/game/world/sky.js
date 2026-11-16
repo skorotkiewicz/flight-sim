@@ -1,4 +1,8 @@
-import { PLANE_STYLES, ef, tf } from "../plane/planemodels.js";
+import {
+	PLANE_STYLES,
+	PLANE_WHEEL_OPTIONS,
+	PLANE_PAINT_OPTIONS,
+} from "../plane/planemodels.js";
 import {
 	Color,
 	MathUtils,
@@ -10,8 +14,7 @@ import {
 	UniformsUtils,
 	Vector3,
 } from "../core/three.js";
-
-var np = [
+var SKY_TIME_PRESETS = [
 	{
 		name: `Morning`,
 		top: 5218278,
@@ -61,7 +64,7 @@ var np = [
 		ink: 3810080,
 	},
 ];
-function rp(e) {
+function sunDirectionForTime(e) {
 	let t = MathUtils.degToRad(e.elevation);
 	let n = MathUtils.degToRad(e.azimuth);
 	return new Vector3(
@@ -70,7 +73,7 @@ function rp(e) {
 		-Math.cos(t) * Math.cos(n),
 	).normalize();
 }
-var ip = class {
+var Sky = class {
 	mesh;
 	mat;
 	constructor() {
@@ -138,7 +141,7 @@ var ip = class {
 		t.bottomColor.value.setHex(e.bottom);
 		t.sunColor.value.setHex(e.sun);
 		t.haloColor.value.setHex(e.halo);
-		t.sunDir.value.copy(rp(e));
+		t.sunDir.value.copy(sunDirectionForTime(e));
 	}
 	follow(e, t) {
 		this.mesh.position.copy(e.position);
@@ -215,7 +218,7 @@ var Water = class {
 		this.mat.uniforms.time.value = t;
 	}
 };
-var op = [
+var HANGAR_CATEGORIES = [
 	{
 		id: `style`,
 		label: `Plane`,
@@ -229,22 +232,22 @@ var op = [
 		label: `Wheels`,
 	},
 ];
-var sp = (e) => `#${e.toString(16).padStart(6, `0`)}`;
-var cp = {
+var formatHexColor = (e) => `#${e.toString(16).padStart(6, `0`)}`;
+var HANGAR_OPTIONS = {
 	style: PLANE_STYLES,
-	paint: tf.map((e) => ({
+	paint: PLANE_PAINT_OPTIONS.map((e) => ({
 		id: e.id,
 		name: e.name,
-		swatch: `linear-gradient(135deg, ${sp(e.body)} 0 62%, ${sp(e.accent)} 62% 100%)`,
+		swatch: `linear-gradient(135deg, ${formatHexColor(e.body)} 0 62%, ${formatHexColor(e.accent)} 62% 100%)`,
 	})),
-	wheels: ef,
+	wheels: PLANE_WHEEL_OPTIONS,
 };
-var lp = (e) => Math.max(0, Math.min(1, e));
-var up = [
+var clampHangarStat = (e) => Math.max(0, Math.min(1, e));
+var HANGAR_STATS = [
 	{
 		key: `topSpeed`,
 		label: `Top speed`,
-		bar: (e) => lp((e.topSpeed * 3.6) / 500),
+		bar: (e) => clampHangarStat((e.topSpeed * 3.6) / 500),
 		text: (e) => `${Math.round(e.topSpeed * 3.6)} km/h`,
 		delta: (e) => Math.round(e.topSpeed * 3.6),
 		better: 1,
@@ -252,7 +255,7 @@ var up = [
 	{
 		key: `climb`,
 		label: `Climb`,
-		bar: (e) => lp(e.climb / 20),
+		bar: (e) => clampHangarStat(e.climb / 20),
 		text: (e) => `${e.climb.toFixed(1)} m/s`,
 		delta: (e) => Math.round(e.climb * 10) / 10,
 		better: 1,
@@ -268,7 +271,7 @@ var up = [
 	{
 		key: `takeoffRun`,
 		label: `Short takeoff`,
-		bar: (e) => lp(1 - e.takeoffRun / 650),
+		bar: (e) => clampHangarStat(1 - e.takeoffRun / 650),
 		text: (e) => `${Math.round(e.takeoffRun / 10) * 10} m run`,
 		delta: (e) => Math.round(e.takeoffRun / 10) * 10,
 		better: -1,
@@ -282,5 +285,14 @@ var up = [
 		better: 1,
 	},
 ];
-
-export { Water, cp, ip, lp, np, op, rp, sp, up };
+export {
+	Water,
+	HANGAR_OPTIONS,
+	Sky,
+	clampHangarStat,
+	SKY_TIME_PRESETS,
+	HANGAR_CATEGORIES,
+	sunDirectionForTime,
+	formatHexColor,
+	HANGAR_STATS,
+};

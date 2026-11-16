@@ -1,5 +1,5 @@
-import { Fd, Nd, makeMesh } from "../plane/meshkit.js";
-import { ym } from "./terrain.js";
+import { createOutlinedMesh, mergeParts, makeMesh } from "../plane/meshkit.js";
+import { RUNWAY_PAVEMENT_COLOR } from "./terrain.js";
 import {
 	BoxGeometry,
 	BufferAttribute,
@@ -13,14 +13,13 @@ import {
 	SphereGeometry,
 	Vector3,
 } from "../core/three.js";
-
-var bm = 8225161;
-var xm = 16052712;
-var Sm = 16773552;
-var Cm = 7070586;
-var wm = new Color(16730682);
-var Tm = new Color(16776692);
-var Em = {
+var AIRFIELD_APRON_COLOR = 8225161;
+var RUNWAY_MARKING_COLOR = 16052712;
+var RUNWAY_EDGE_LIGHT_COLOR = 16773552;
+var RUNWAY_THRESHOLD_LIGHT_COLOR = 7070586;
+var PAPI_RED_COLOR = new Color(16730682);
+var PAPI_WHITE_COLOR = new Color(16776692);
+var RUNWAY_DIGIT_SEGMENTS = {
 	a: [0.5, 2, 1, 0],
 	b: [1, 1.5, 0, 1],
 	c: [1, 0.5, 0, 1],
@@ -29,7 +28,7 @@ var Em = {
 	f: [0, 1.5, 0, 1],
 	g: [0.5, 1, 1, 0],
 };
-var Dm = [
+var RUNWAY_DIGIT_PATTERNS = [
 	`abcdef`,
 	`bc`,
 	`abged`,
@@ -41,7 +40,7 @@ var Dm = [
 	`abcdefg`,
 	`abcdfg`,
 ];
-function Om(e, t) {
+function formatRunwayNumber(e, t) {
 	let n = (Math.atan2(e, -t) * 180) / Math.PI;
 	if (n < 0) {
 		n += 360;
@@ -52,7 +51,7 @@ function Om(e, t) {
 	}
 	return String(r).padStart(2, `0`);
 }
-var km = class {
+var AirfieldScene = class {
 	af;
 	group = new Group();
 	sock;
@@ -78,14 +77,14 @@ var km = class {
 			);
 		}
 		l.push(
-			makeMesh(new BoxGeometry(s, 0.1, c), ym, {
+			makeMesh(new BoxGeometry(s, 0.1, c), RUNWAY_PAVEMENT_COLOR, {
 				pos: [0, 0.16, 0],
 			}),
 		);
 		let u = [];
 		let d = (e, t, n, r) =>
 			u.push(
-				makeMesh(new BoxGeometry(n, 0.04, r), xm, {
+				makeMesh(new BoxGeometry(n, 0.04, r), RUNWAY_MARKING_COLOR, {
 					pos: [e, 0.29, t],
 				}),
 			);
@@ -107,22 +106,22 @@ var km = class {
 		for (let e = -s / 2 + 80; e <= s / 2 - 80; e += 40) {
 			d(e + 10, 0, 20, 0.9);
 		}
-		this.addNumber(d, -1, Om(e.dirX, e.dirZ), s);
-		this.addNumber(d, 1, Om(-e.dirX, -e.dirZ), s);
+		this.addNumber(d, -1, formatRunwayNumber(e.dirX, e.dirZ), s);
+		this.addNumber(d, 1, formatRunwayNumber(-e.dirX, -e.dirZ), s);
 		let f = o / 2 + 40;
 		l.push(
-			makeMesh(new BoxGeometry(110, 0.1, 32), bm, {
+			makeMesh(new BoxGeometry(110, 0.1, 32), AIRFIELD_APRON_COLOR, {
 				pos: [-50, 0.14, f - 16],
 			}),
 		);
 		l.push(
-			makeMesh(new BoxGeometry(14, 0.1, f - 32 - c / 2), bm, {
+			makeMesh(new BoxGeometry(14, 0.1, f - 32 - c / 2), AIRFIELD_APRON_COLOR, {
 				pos: [-50, 0.14, c / 2 + (f - 32 - c / 2) / 2],
 			}),
 		);
-		let p = new Mesh(Nd(l), r);
+		let p = new Mesh(mergeParts(l), r);
 		p.receiveShadow = true;
-		let m = new Mesh(Nd(u), i);
+		let m = new Mesh(mergeParts(u), i);
 		m.receiveShadow = true;
 		this.group.add(p, m);
 		let h = (e, t) => [
@@ -177,7 +176,13 @@ var km = class {
 						pos: [e, 0.35, n],
 					}),
 				);
-				_.push([e, n, Math.abs(Math.abs(e) - s / 2) < 1 ? Cm : Sm]);
+				_.push([
+					e,
+					n,
+					Math.abs(Math.abs(e) - s / 2) < 1
+						? RUNWAY_THRESHOLD_LIGHT_COLOR
+						: RUNWAY_EDGE_LIGHT_COLOR,
+				]);
 			}
 		}
 		let v = [];
@@ -210,7 +215,7 @@ var km = class {
 				}),
 			);
 		}
-		let y = Fd(Nd(g), t, n);
+		let y = createOutlinedMesh(mergeParts(g), t, n);
 		y.receiveShadow = true;
 		this.group.add(y);
 		let b = _.map(([e, t, n]) =>
@@ -239,11 +244,11 @@ var km = class {
 		this.bulbMat = new MeshBasicMaterial({
 			vertexColors: true,
 		});
-		this.papi = new Mesh(Nd(b), this.bulbMat);
+		this.papi = new Mesh(mergeParts(b), this.bulbMat);
 		this.group.add(this.papi);
 		this.sock = new Group();
 		this.sock.position.set(s / 2 - 120, 7.6, -o / 2 - 14);
-		let S = Nd([
+		let S = mergeParts([
 			makeMesh(new CylinderGeometry(0.7, 0.35, 1.4, 8, 1, true), 16742954, {
 				pos: [0, 0, -0.7],
 				rot: [Math.PI / 2, 0, 0],
@@ -257,7 +262,7 @@ var km = class {
 				rot: [Math.PI / 2, 0, 0],
 			}),
 		]);
-		this.sock.add(Fd(S, t, n));
+		this.sock.add(createOutlinedMesh(S, t, n));
 		this.group.add(this.sock);
 		this.previewSpot = new Vector3(-49, 0.2, f - 13);
 	}
@@ -267,8 +272,8 @@ var km = class {
 		let o = 1.2;
 		[...n].forEach((t, n) => {
 			let r = (n === 0 ? -6.5 : 1.5) * i;
-			for (let n of Dm[+t]) {
-				let [t, s, c, l] = Em[n];
+			for (let n of RUNWAY_DIGIT_PATTERNS[+t]) {
+				let [t, s, c, l] = RUNWAY_DIGIT_SEGMENTS[n];
 				e(a + i * ((s - 1) * 5), r + i * t * 5, l ? 6.2 : o, c ? 6.2 : o);
 			}
 		});
@@ -299,7 +304,7 @@ var km = class {
 		for (let n of this.papiLights) {
 			let r = (n.x - i) * n.dir;
 			let a = Math.atan2(e.y - t.height, Math.max(r, 1));
-			let s = r > 0 && a < n.angle ? wm : Tm;
+			let s = r > 0 && a < n.angle ? PAPI_RED_COLOR : PAPI_WHITE_COLOR;
 			for (let e = n.start; e < n.start + n.count; e++) {
 				o.setXYZ(e, s.r, s.g, s.b);
 			}
@@ -315,7 +320,7 @@ var km = class {
 		this.bulbMat.dispose();
 	}
 };
-function Am(e) {
+function terrainLodForDistance(e) {
 	if (e <= 1) {
 		return {
 			res: 64,
@@ -402,7 +407,7 @@ var TerrainManager = class {
 				}
 				let n = i + t;
 				let o = a + e;
-				let s = Am(Math.max(Math.abs(t), Math.abs(e)));
+				let s = terrainLodForDistance(Math.max(Math.abs(t), Math.abs(e)));
 				let c = this.key(n, o);
 				let l = this.entries.get(c);
 				if (!l) {
@@ -567,5 +572,17 @@ var TerrainManager = class {
 		this.entries.clear();
 	}
 };
-
-export { Am, Cm, Dm, Em, Om, Sm, TerrainManager, Tm, bm, km, wm, xm };
+export {
+	terrainLodForDistance,
+	RUNWAY_THRESHOLD_LIGHT_COLOR,
+	RUNWAY_DIGIT_PATTERNS,
+	RUNWAY_DIGIT_SEGMENTS,
+	formatRunwayNumber,
+	RUNWAY_EDGE_LIGHT_COLOR,
+	TerrainManager,
+	PAPI_WHITE_COLOR,
+	AIRFIELD_APRON_COLOR,
+	AirfieldScene,
+	PAPI_RED_COLOR,
+	RUNWAY_MARKING_COLOR,
+};

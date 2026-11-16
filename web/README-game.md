@@ -12,7 +12,23 @@ cd web && bun run dev     # dev server
 cd web && bun run build   # production build -> dist/
 ```
 
-To regenerate the modules after editing `rename-map.json`:
+To apply `rename-map.json` to the current modules without rebuilding them from
+the original bundle:
+
+```
+node tools/rename.mjs web/src/game rename-map.json web/src/game
+cd web && biome format --write src/game
+```
+
+The rename command accepts either a single JavaScript file or a directory of
+modules. It updates top-level bindings and their references, including imports
+and exports between modules. It preserves shadowed locals, property keys, and
+explicit export aliases, and rejects binding collisions before writing files.
+Running it again with the same map leaves the files unchanged.
+Namespace imports of renamed exports require manual migration; the tool rejects
+them before writing files.
+
+To regenerate the modules from the original bundle instead:
 
 ```
 node tools/split.mjs webcrack-out/deobfuscated.js rename-map.json web/src/game
@@ -88,9 +104,28 @@ All game code lives in `web/src/game/`, grouped:
 ## Variable-name map
 
 `rename-map.json` (repo root): `{ "map": { "<minified>": "<recovered>" } }`.
-To extend it, add entries and re-run the command above — renaming is
-babel-scope-aware, so shadowed locals are untouched, and cross-module imports
-are re-wired automatically.
+The map contains 395 recovered names, including 274 additional names inferred
+from the game code. These describe top-level classes, helpers, constants, and
+scratch objects. Short names inside functions remain scoped locals.
+
+To extend it, add entries and run the rename command above. The names describe
+observed usage; they do not claim to recover the author's exact original names.
+
+Check the rename tool with `node --test tools/rename.test.mjs` and the game with
+`cd web && bun run build`.
+
+The standalone terrain worker uses `worker-rename-map.json`, with 16 recovered
+top-level names. It has its own map because its short names refer to different
+bindings than those in the main bundle. Matching noise and terrain helpers use
+the same recovered names in both copies. Apply the worker map with:
+
+```
+node tools/rename.mjs web/public/assets/chunk.worker.js worker-rename-map.json web/public/assets/chunk.worker.js
+```
+
+The worker builds chunk geometry and scatters props, then transfers the position,
+normal, color, index, and prop buffers to the game. Its request and response field
+names remain unchanged. Function-local short names remain scoped locals.
 
 Notes / caveats:
 

@@ -13,8 +13,7 @@ import {
 	Vector2,
 	WebGLRenderTarget,
 } from "./three.js";
-
-var Xf = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
+var fullscreenCamera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
 var fxaaMesh = new (class extends BufferGeometry {
 	constructor() {
 		super();
@@ -33,7 +32,7 @@ var PostFX = class {
 		this._mesh.geometry.dispose();
 	}
 	render(e) {
-		e.render(this._mesh, Xf);
+		e.render(this._mesh, fullscreenCamera);
 	}
 	get material() {
 		return this._mesh.material;
@@ -42,7 +41,7 @@ var PostFX = class {
 		this._mesh.material = e;
 	}
 };
-var $f = {
+var FXAA_SHADER = {
 	name: `FXAAShader`,
 	uniforms: {
 		tDiffuse: {
@@ -320,7 +319,7 @@ var $f = {
 
 		}`,
 };
-var ep = `
+var INK_EDGE_FRAGMENT_SHADER = `
   #include <packing>
   uniform sampler2D tColor;
   uniform sampler2D tDepth;
@@ -368,7 +367,7 @@ var ep = `
     gl_FragColor = vec4(toSRGB(col), 1.0);
   }
 `;
-var tp = class {
+var PostProcessingComposer = class {
 	rt;
 	rt2;
 	edge;
@@ -424,15 +423,15 @@ var tp = class {
 				},
 			},
 			vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
-			fragmentShader: ep,
+			fragmentShader: INK_EDGE_FRAGMENT_SHADER,
 			depthTest: false,
 			depthWrite: false,
 		});
 		this.edge = new PostFX(this.edgeMat);
 		this.fxaaMat = new ShaderMaterial({
-			uniforms: UniformsUtils.clone($f.uniforms),
-			vertexShader: $f.vertexShader,
-			fragmentShader: $f.fragmentShader,
+			uniforms: UniformsUtils.clone(FXAA_SHADER.uniforms),
+			vertexShader: FXAA_SHADER.vertexShader,
+			fragmentShader: FXAA_SHADER.fragmentShader,
 			depthTest: false,
 			depthWrite: false,
 		});
@@ -472,5 +471,11 @@ var tp = class {
 		this.fxaa.dispose();
 	}
 };
-
-export { $f, PostFX, Xf, ep, fxaaMesh, tp };
+export {
+	FXAA_SHADER,
+	PostFX,
+	fullscreenCamera,
+	INK_EDGE_FRAGMENT_SHADER,
+	fxaaMesh,
+	PostProcessingComposer,
+};

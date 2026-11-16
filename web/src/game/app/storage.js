@@ -1,11 +1,10 @@
-import { fd } from "../flight/clock.js";
+import { SETTINGS_STORAGE_KEY } from "../flight/clock.js";
 import { BufferAttribute, BufferGeometry } from "../core/three.js";
-
 var BEST_STORAGE_KEY = `baron.best.v1`;
 function randomSeed() {
 	return Math.floor(Math.random() * 999999999) + 1;
 }
-function hd() {
+function createDefaultSettings() {
 	return {
 		quality: `auto`,
 		assist: `arcade`,
@@ -18,21 +17,21 @@ function hd() {
 		tilt: false,
 	};
 }
-function gd(e) {
+function readStorageItem(e) {
 	try {
 		return localStorage.getItem(e);
 	} catch {
 		return null;
 	}
 }
-function _d(e, t) {
+function writeStorageItem(e, t) {
 	try {
 		localStorage.setItem(e, t);
 	} catch {}
 }
-function vd() {
-	let e = hd();
-	let t = gd(fd);
+function loadSettings() {
+	let e = createDefaultSettings();
+	let t = readStorageItem(SETTINGS_STORAGE_KEY);
 	if (!t) {
 		return e;
 	}
@@ -55,11 +54,11 @@ function vd() {
 		return e;
 	}
 }
-function yd(e) {
-	_d(fd, JSON.stringify(e));
+function saveSettings(e) {
+	writeStorageItem(SETTINGS_STORAGE_KEY, JSON.stringify(e));
 }
-function bd() {
-	let e = gd(BEST_STORAGE_KEY);
+function loadBestScores() {
+	let e = readStorageItem(BEST_STORAGE_KEY);
 	if (!e) {
 		return {};
 	}
@@ -69,28 +68,28 @@ function bd() {
 		return {};
 	}
 }
-function xd(e, t = `free`, n = 0) {
+function getScoreStorageKey(e, t = `free`, n = 0) {
 	if (t === `route`) {
 		return `route:${e}:${n}`;
 	} else {
 		return `free:${e}`;
 	}
 }
-function Sd(e) {
-	return bd()[e] ?? null;
+function getBestScore(e) {
+	return loadBestScores()[e] ?? null;
 }
-function Cd(e, t) {
-	let n = bd();
+function saveBestScore(e, t) {
+	let n = loadBestScores();
 	let r = n[e];
 	if (r && r.medal >= t.medal) {
 		return false;
 	} else {
 		n[e] = t;
-		_d(BEST_STORAGE_KEY, JSON.stringify(n));
+		writeStorageItem(BEST_STORAGE_KEY, JSON.stringify(n));
 		return true;
 	}
 }
-function wd(e, t = false) {
+function mergeGeometries(e, t = false) {
 	let n = e[0].index !== null;
 	let r = new Set(Object.keys(e[0].attributes));
 	let i = new Set(Object.keys(e[0].morphAttributes));
@@ -174,7 +173,7 @@ function wd(e, t = false) {
 		c.setIndex(n);
 	}
 	for (let e in a) {
-		let t = Td(a[e]);
+		let t = mergeAttributes(a[e]);
 		if (!t) {
 			console.error(
 				`THREE.BufferGeometryUtils: .mergeGeometries() failed while trying to merge the ${e} attribute.`,
@@ -195,7 +194,7 @@ function wd(e, t = false) {
 			for (let r = 0; r < o[e].length; ++r) {
 				t.push(o[e][r][n]);
 			}
-			let r = Td(t);
+			let r = mergeAttributes(t);
 			if (!r) {
 				console.error(
 					`THREE.BufferGeometryUtils: .mergeGeometries() failed while trying to merge the ${e} morphAttribute.`,
@@ -207,7 +206,7 @@ function wd(e, t = false) {
 	}
 	return c;
 }
-function Td(e) {
+function mergeAttributes(e) {
 	let t;
 	let n;
 	let r;
@@ -276,19 +275,18 @@ function Td(e) {
 	}
 	return s;
 }
-
 export {
 	BEST_STORAGE_KEY,
-	Cd,
-	Sd,
-	Td,
-	_d,
-	bd,
-	gd,
-	hd,
+	saveBestScore,
+	getBestScore,
+	mergeAttributes,
+	writeStorageItem,
+	loadBestScores,
+	readStorageItem,
+	createDefaultSettings,
 	randomSeed,
-	vd,
-	wd,
-	xd,
-	yd,
+	loadSettings,
+	mergeGeometries,
+	getScoreStorageKey,
+	saveSettings,
 };

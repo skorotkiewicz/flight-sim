@@ -1,7 +1,11 @@
-import { FLAP_POSITIONS, Zu, nd, rd } from "./flight.js";
+import {
+	FLAP_POSITIONS,
+	shapeTouchStickAxis,
+	TouchFlightControls,
+	KEYBOARD_AXIS_SLEW_RATE,
+} from "./flight.js";
 import { isTouchScreen } from "./input.js";
-
-var id = 0.6;
+var THROTTLE_CHANGE_RATE = 0.6;
 var DesktopInput = class {
 	target;
 	keys = new Set();
@@ -28,7 +32,7 @@ var DesktopInput = class {
 	onInputKind = null;
 	constructor(e) {
 		this.target = e;
-		this.touch = new nd(e);
+		this.touch = new TouchFlightControls(e);
 		window.addEventListener(
 			`pointerdown`,
 			(e) => this.setKind(e.pointerType === `touch` ? `touch` : `desktop`),
@@ -132,7 +136,7 @@ var DesktopInput = class {
 			(n.has(`KeyA`) || n.has(`ArrowLeft`) ? 1 : 0);
 		let a = +!!n.has(`KeyE`) - !!n.has(`KeyQ`);
 		let o = (t, n) => {
-			let r = rd * e;
+			let r = KEYBOARD_AXIS_SLEW_RATE * e;
 			if (n === 0) {
 				if (Math.abs(t) <= r * 1.5) {
 					return 0;
@@ -151,10 +155,10 @@ var DesktopInput = class {
 		let l = this.axes.yaw;
 		let u = n.has(`KeyB`);
 		if (n.has(`ShiftLeft`) || n.has(`ShiftRight`)) {
-			this.throttle += id * e;
+			this.throttle += THROTTLE_CHANGE_RATE * e;
 		}
 		if (n.has(`ControlLeft`) || n.has(`ControlRight`)) {
-			this.throttle -= id * e;
+			this.throttle -= THROTTLE_CHANGE_RATE * e;
 		}
 		for (let e = 1; e <= 9; e++) {
 			if (n.has(`Digit${e}`)) {
@@ -183,7 +187,7 @@ var DesktopInput = class {
 				l = i;
 			}
 			if (a) {
-				this.throttle -= a * id * 1.5 * e;
+				this.throttle -= a * THROTTLE_CHANGE_RATE * 1.5 * e;
 			}
 			if (d.buttons[1]?.pressed) {
 				u = true;
@@ -195,8 +199,8 @@ var DesktopInput = class {
 			let e = p.stick();
 			let t = e ? null : f.tilt();
 			if (e) {
-				this.axes.roll = c = Zu(e.x);
-				this.axes.pitch = s = Zu(e.y);
+				this.axes.roll = c = shapeTouchStickAxis(e.x);
+				this.axes.pitch = s = shapeTouchStickAxis(e.y);
 			} else if (t) {
 				c = t.x;
 				s = t.y;
@@ -232,7 +236,7 @@ var DesktopInput = class {
 		t.flaps = FLAP_POSITIONS[this.flapNotch];
 	}
 };
-var od = `baron.iosTip.dismissed`;
+var IOS_INSTALL_TIP_STORAGE_KEY = `baron.iosTip.dismissed`;
 var PwaManager = class {
 	onChange = null;
 	installEvent = null;
@@ -240,7 +244,8 @@ var PwaManager = class {
 	tipDismissed = false;
 	constructor() {
 		try {
-			this.tipDismissed = localStorage.getItem(od) === `1`;
+			this.tipDismissed =
+				localStorage.getItem(IOS_INSTALL_TIP_STORAGE_KEY) === `1`;
 		} catch {}
 		window.addEventListener(`beforeinstallprompt`, (e) => {
 			e.preventDefault();
@@ -324,7 +329,7 @@ var PwaManager = class {
 	dismissTip() {
 		this.tipDismissed = true;
 		try {
-			localStorage.setItem(od, `1`);
+			localStorage.setItem(IOS_INSTALL_TIP_STORAGE_KEY, `1`);
 		} catch {}
 		this.changed();
 	}
@@ -346,5 +351,9 @@ var PwaManager = class {
 		this.onChange?.();
 	}
 };
-
-export { DesktopInput, PwaManager, id, od };
+export {
+	DesktopInput,
+	PwaManager,
+	THROTTLE_CHANGE_RATE,
+	IOS_INSTALL_TIP_STORAGE_KEY,
+};

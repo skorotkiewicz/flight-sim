@@ -1,17 +1,16 @@
-import { SimplexNoise, am, im } from "./noise.js";
-
-var um = {
+import { SimplexNoise, createSeededRandom, hashSeedIntegers } from "./noise.js";
+var RUNWAY_DIMENSIONS = {
 	paved: 900,
 	pavedWidth: 30,
 	overrun: 60,
 	shoulder: 15,
 };
-var dm = (e, t, n) => (e < t ? t : e > n ? n : e);
-function fm(e, t, n) {
-	let r = dm((n - e) / (t - e), 0, 1);
+var clampTerrainValue = (e, t, n) => (e < t ? t : e > n ? n : e);
+function terrainSmoothstep(e, t, n) {
+	let r = clampTerrainValue((n - e) / (t - e), 0, 1);
 	return r * r * (3 - r * 2);
 }
-function pm(e) {
+function hexToLinearRgb(e) {
 	let t = (e) => {
 		e /= 255;
 		if (e <= 0.04045) {
@@ -22,31 +21,31 @@ function pm(e) {
 	};
 	return [t((e >> 16) & 255), t((e >> 8) & 255), t(e & 255)];
 }
-var mm = {
-	deep: pm(1925011),
-	shallow: pm(3981519),
-	foam: pm(16055295),
-	sand: pm(15915158),
-	meadow: pm(8831567),
-	meadow2: pm(7977034),
-	airfield: pm(9226070),
-	forest: pm(4099900),
-	forest2: pm(5086778),
-	rock: pm(11049612),
-	rockDark: pm(9207154),
-	snow: pm(16514559),
+var TERRAIN_PALETTE = {
+	deep: hexToLinearRgb(1925011),
+	shallow: hexToLinearRgb(3981519),
+	foam: hexToLinearRgb(16055295),
+	sand: hexToLinearRgb(15915158),
+	meadow: hexToLinearRgb(8831567),
+	meadow2: hexToLinearRgb(7977034),
+	airfield: hexToLinearRgb(9226070),
+	forest: hexToLinearRgb(4099900),
+	forest2: hexToLinearRgb(5086778),
+	rock: hexToLinearRgb(11049612),
+	rockDark: hexToLinearRgb(9207154),
+	snow: hexToLinearRgb(16514559),
 	farm: [
-		pm(13029728),
-		pm(9682764),
-		pm(14466402),
-		pm(7844168),
-		pm(11389292),
-		pm(13608544),
+		hexToLinearRgb(13029728),
+		hexToLinearRgb(9682764),
+		hexToLinearRgb(14466402),
+		hexToLinearRgb(7844168),
+		hexToLinearRgb(11389292),
+		hexToLinearRgb(13608544),
 	],
 };
-var hm = 40;
-var gm = 110;
-var _m = 260;
+var AIRFIELD_END_PADDING = 40;
+var AIRFIELD_FLAT_HALF_WIDTH = 110;
+var AIRFIELD_BLEND_DISTANCE = 260;
 var Terrain = class {
 	seed;
 	airfields;
@@ -60,14 +59,14 @@ var Terrain = class {
 	nVar;
 	constructor(e) {
 		this.seed = e;
-		this.nCont = new SimplexNoise(im(e, 1));
-		this.nHill = new SimplexNoise(im(e, 2));
-		this.nMask = new SimplexNoise(im(e, 3));
-		this.nRidge = new SimplexNoise(im(e, 4));
-		this.nWarp = new SimplexNoise(im(e, 5));
-		this.nForest = new SimplexNoise(im(e, 7));
-		this.nFarm = new SimplexNoise(im(e, 8));
-		this.nVar = new SimplexNoise(im(e, 9));
+		this.nCont = new SimplexNoise(hashSeedIntegers(e, 1));
+		this.nHill = new SimplexNoise(hashSeedIntegers(e, 2));
+		this.nMask = new SimplexNoise(hashSeedIntegers(e, 3));
+		this.nRidge = new SimplexNoise(hashSeedIntegers(e, 4));
+		this.nWarp = new SimplexNoise(hashSeedIntegers(e, 5));
+		this.nForest = new SimplexNoise(hashSeedIntegers(e, 7));
+		this.nFarm = new SimplexNoise(hashSeedIntegers(e, 8));
+		this.nVar = new SimplexNoise(hashSeedIntegers(e, 9));
 		this.airfields = [];
 		this.placeAirfields();
 	}
@@ -108,7 +107,8 @@ var Terrain = class {
 		let a = 55 + i * 330;
 		a += this.fbm(this.nHill, n / 1500, r / 1500, 4) * 48;
 		let o =
-			fm(0.05, 0.55, this.nMask.noise(n / 8000, r / 8000)) * fm(-0.05, 0.25, i);
+			terrainSmoothstep(0.05, 0.55, this.nMask.noise(n / 8000, r / 8000)) *
+			terrainSmoothstep(-0.05, 0.25, i);
 		if (o > 0) {
 			let e = this.ridged(this.nRidge, n / 2400, r / 2400, 4);
 			a += o * e ** 1.5 * 640;
@@ -117,22 +117,29 @@ var Terrain = class {
 			let e = (a - 4) / 16;
 			let t = Math.floor(e);
 			let n = e - t;
-			a = 4 + (t + n * 0.45 + fm(0.3, 0.7, n) * 0.55) * 16;
+			a = 4 + (t + n * 0.45 + terrainSmoothstep(0.3, 0.7, n) * 0.55) * 16;
 		}
 		return a;
 	}
 	fieldT(e, t, n) {
 		let r = t - e.x;
 		let i = n - e.z;
-		let a = e.length / 2 + hm + _m + gm;
+		let a =
+			e.length / 2 +
+			AIRFIELD_END_PADDING +
+			AIRFIELD_BLEND_DISTANCE +
+			AIRFIELD_FLAT_HALF_WIDTH;
 		if (r * r + i * i > a * a) {
 			return 0;
 		}
 		let o = r * e.dirX + i * e.dirZ;
 		let s = -r * e.dirZ + i * e.dirX;
-		let c = Math.max(Math.abs(o) - (e.length / 2 + hm), 0);
-		let l = Math.max(Math.abs(s) - gm, 0);
-		return 1 - fm(0, _m, Math.sqrt(c * c + l * l));
+		let c = Math.max(Math.abs(o) - (e.length / 2 + AIRFIELD_END_PADDING), 0);
+		let l = Math.max(Math.abs(s) - AIRFIELD_FLAT_HALF_WIDTH, 0);
+		return (
+			1 -
+			terrainSmoothstep(0, AIRFIELD_BLEND_DISTANCE, Math.sqrt(c * c + l * l))
+		);
 	}
 	fieldMask(e, t) {
 		let n = 0;
@@ -161,10 +168,14 @@ var Terrain = class {
 			return 0;
 		} else {
 			return (
-				fm(0.04, 0.28, this.fbm(this.nForest, e / 1800, t / 1800, 3)) *
-				(1 - fm(0.35, 0.5, r)) *
-				(1 - fm(320, 430, n)) *
-				(1 - fm(0, 0.3, i))
+				terrainSmoothstep(
+					0.04,
+					0.28,
+					this.fbm(this.nForest, e / 1800, t / 1800, 3),
+				) *
+				(1 - terrainSmoothstep(0.35, 0.5, r)) *
+				(1 - terrainSmoothstep(320, 430, n)) *
+				(1 - terrainSmoothstep(0, 0.3, i))
 			);
 		}
 	}
@@ -172,7 +183,11 @@ var Terrain = class {
 		if (n < 5 || n > 170 || r > 0.22) {
 			return 0;
 		} else {
-			return fm(-0.05, 0.12, this.nFarm.noise(e / 5000, t / 5000));
+			return terrainSmoothstep(
+				-0.05,
+				0.12,
+				this.nFarm.noise(e / 5000, t / 5000),
+			);
 		}
 	}
 	farmCell(e, t) {
@@ -184,7 +199,7 @@ var Terrain = class {
 			for (let s = -1; s <= 1; s++) {
 				let c = n + s;
 				let l = r + o;
-				let u = im(this.seed, c, l, 31);
+				let u = hashSeedIntegers(this.seed, c, l, 31);
 				let d = (c + (u & 65535) / 65536) * 230;
 				let f = (l + ((u >>> 16) & 65535) / 65536) * 230;
 				let p = (d - e) * (d - e) + (f - t) * (f - t);
@@ -203,34 +218,42 @@ var Terrain = class {
 		let o;
 		let s = 1 - r;
 		if (n < -0.6) {
-			let e = fm(-0.6, -9, n);
-			i[a] = mm.shallow[0] + (mm.deep[0] - mm.shallow[0]) * e;
-			i[a + 1] = mm.shallow[1] + (mm.deep[1] - mm.shallow[1]) * e;
-			i[a + 2] = mm.shallow[2] + (mm.deep[2] - mm.shallow[2]) * e;
+			let e = terrainSmoothstep(-0.6, -9, n);
+			i[a] =
+				TERRAIN_PALETTE.shallow[0] +
+				(TERRAIN_PALETTE.deep[0] - TERRAIN_PALETTE.shallow[0]) * e;
+			i[a + 1] =
+				TERRAIN_PALETTE.shallow[1] +
+				(TERRAIN_PALETTE.deep[1] - TERRAIN_PALETTE.shallow[1]) * e;
+			i[a + 2] =
+				TERRAIN_PALETTE.shallow[2] +
+				(TERRAIN_PALETTE.deep[2] - TERRAIN_PALETTE.shallow[2]) * e;
 			return;
 		}
 		if (n < 0.6) {
-			o = mm.foam;
+			o = TERRAIN_PALETTE.foam;
 		} else if (n < 5 && s < 0.2) {
-			o = mm.sand;
+			o = TERRAIN_PALETTE.sand;
 		} else if (s > 0.42) {
-			o = s > 0.58 ? mm.rockDark : mm.rock;
+			o = s > 0.58 ? TERRAIN_PALETTE.rockDark : TERRAIN_PALETTE.rock;
 		} else if (n > 440 + this.nVar.noise(e / 400, t / 400) * 70) {
-			o = s < 0.3 ? mm.snow : mm.rock;
+			o = s < 0.3 ? TERRAIN_PALETTE.snow : TERRAIN_PALETTE.rock;
 		} else {
 			let r = this.fieldMask(e, t);
 			o =
 				r > 0.45
-					? mm.airfield
+					? TERRAIN_PALETTE.airfield
 					: this.forestDensity(e, t, n, s, r) > 0.45
 						? this.nVar.noise(e / 300, t / 300) > 0
-							? mm.forest
-							: mm.forest2
+							? TERRAIN_PALETTE.forest
+							: TERRAIN_PALETTE.forest2
 						: this.farmMask(e, t, n, s) > 0.5 && r < 0.05
-							? mm.farm[this.farmCell(e, t) % mm.farm.length]
+							? TERRAIN_PALETTE.farm[
+									this.farmCell(e, t) % TERRAIN_PALETTE.farm.length
+								]
 							: this.nVar.noise(e / 900, t / 900) > 0.1
-								? mm.meadow2
-								: mm.meadow;
+								? TERRAIN_PALETTE.meadow2
+								: TERRAIN_PALETTE.meadow;
 		}
 		let c = 1 + this.nVar.noise(e / 160 + 50, t / 160) * 0.06;
 		i[a] = o[0] * c;
@@ -309,10 +332,10 @@ var Terrain = class {
 				heading: s.heading,
 				dirX: Math.cos(s.heading),
 				dirZ: Math.sin(s.heading),
-				length: um.paved + um.overrun * 2,
-				width: um.pavedWidth + um.shoulder * 2,
-				paved: um.paved,
-				pavedWidth: um.pavedWidth,
+				length: RUNWAY_DIMENSIONS.paved + RUNWAY_DIMENSIONS.overrun * 2,
+				width: RUNWAY_DIMENSIONS.pavedWidth + RUNWAY_DIMENSIONS.shoulder * 2,
+				paved: RUNWAY_DIMENSIONS.paved,
+				pavedWidth: RUNWAY_DIMENSIONS.pavedWidth,
 				height: Math.max(s.mean, 9),
 				home: o,
 			},
@@ -320,7 +343,7 @@ var Terrain = class {
 		};
 	}
 	placeAirfields() {
-		let e = am(im(this.seed, 99));
+		let e = createSeededRandom(hashSeedIntegers(this.seed, 99));
 		let t = this.searchField(0, 0, 1800, 150, e, 0, true);
 		if (t.score >= 1000) {
 			t = this.searchField(0, 0, 7000, 450, e, 0, true);
@@ -360,7 +383,7 @@ var Terrain = class {
 			let i = t - n.z;
 			let a = Math.abs(r * n.dirX + i * n.dirZ);
 			let o = Math.abs(-r * n.dirZ + i * n.dirX);
-			if (!(a > n.length / 2 + hm + 200)) {
+			if (!(a > n.length / 2 + AIRFIELD_END_PADDING + 200)) {
 				if (a <= n.paved / 2 && o <= n.pavedWidth / 2) {
 					return `paved`;
 				}
@@ -393,6 +416,16 @@ var Terrain = class {
 		};
 	}
 };
-var ym = 6711922;
-
-export { Terrain, _m, dm, fm, gm, hm, mm, pm, um, ym };
+var RUNWAY_PAVEMENT_COLOR = 6711922;
+export {
+	Terrain,
+	AIRFIELD_BLEND_DISTANCE,
+	clampTerrainValue,
+	terrainSmoothstep,
+	AIRFIELD_FLAT_HALF_WIDTH,
+	AIRFIELD_END_PADDING,
+	TERRAIN_PALETTE,
+	hexToLinearRgb,
+	RUNWAY_DIMENSIONS,
+	RUNWAY_PAVEMENT_COLOR,
+};

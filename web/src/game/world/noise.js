@@ -1,4 +1,4 @@
-function im(...e) {
+function hashSeedIntegers(...e) {
 	let t = 2166136261;
 	for (let n = 0; n < e.length; n++) {
 		let r = Math.imul((e[n] | 0) ^ -1640531527, 2246822507);
@@ -11,7 +11,7 @@ function im(...e) {
 	}
 	return t >>> 0;
 }
-function am(e) {
+function createSeededRandom(e) {
 	let t = e >>> 0;
 	return () => {
 		t = (t + 1831565813) | 0;
@@ -20,17 +20,17 @@ function am(e) {
 		return ((e ^ (e >>> 14)) >>> 0) / 4294967296;
 	};
 }
-var om = new Float32Array([
+var SIMPLEX_GRADIENTS_2D = new Float32Array([
 	1, 1, -1, 1, 1, -1, -1, -1, 1, 0, -1, 0, 1, 0, -1, 0, 0, 1, 0, -1, 0, 1, 0,
 	-1,
 ]);
-var sm = (Math.sqrt(3) - 1) * 0.5;
-var cm = (3 - Math.sqrt(3)) / 6;
+var SIMPLEX_SKEW_2D = (Math.sqrt(3) - 1) * 0.5;
+var SIMPLEX_UNSKEW_2D = (3 - Math.sqrt(3)) / 6;
 var SimplexNoise = class {
 	perm = new Uint8Array(512);
 	permMod12 = new Uint8Array(512);
 	constructor(e) {
-		let t = am(e);
+		let t = createSeededRandom(e);
 		let n = new Uint8Array(256);
 		for (let e = 0; e < 256; e++) {
 			n[e] = e;
@@ -49,18 +49,18 @@ var SimplexNoise = class {
 	noise(e, t) {
 		let n = this.perm;
 		let r = this.permMod12;
-		let i = (e + t) * sm;
+		let i = (e + t) * SIMPLEX_SKEW_2D;
 		let a = Math.floor(e + i);
 		let o = Math.floor(t + i);
-		let s = (a + o) * cm;
+		let s = (a + o) * SIMPLEX_UNSKEW_2D;
 		let c = e - (a - s);
 		let l = t - (o - s);
 		let u = +(c > l);
 		let d = c > l ? 0 : 1;
-		let f = c - u + cm;
-		let p = l - d + cm;
-		let m = c - 1 + cm * 2;
-		let h = l - 1 + cm * 2;
+		let f = c - u + SIMPLEX_UNSKEW_2D;
+		let p = l - d + SIMPLEX_UNSKEW_2D;
+		let m = c - 1 + SIMPLEX_UNSKEW_2D * 2;
+		let h = l - 1 + SIMPLEX_UNSKEW_2D * 2;
 		let g = a & 255;
 		let _ = o & 255;
 		let v = 0;
@@ -68,22 +68,31 @@ var SimplexNoise = class {
 		if (y > 0) {
 			let e = r[g + n[_]] * 2;
 			y *= y;
-			v += y * y * (om[e] * c + om[e + 1] * l);
+			v +=
+				y * y * (SIMPLEX_GRADIENTS_2D[e] * c + SIMPLEX_GRADIENTS_2D[e + 1] * l);
 		}
 		let b = 0.5 - f * f - p * p;
 		if (b > 0) {
 			let e = r[g + u + n[_ + d]] * 2;
 			b *= b;
-			v += b * b * (om[e] * f + om[e + 1] * p);
+			v +=
+				b * b * (SIMPLEX_GRADIENTS_2D[e] * f + SIMPLEX_GRADIENTS_2D[e + 1] * p);
 		}
 		let x = 0.5 - m * m - h * h;
 		if (x > 0) {
 			let e = r[g + 1 + n[_ + 1]] * 2;
 			x *= x;
-			v += x * x * (om[e] * m + om[e + 1] * h);
+			v +=
+				x * x * (SIMPLEX_GRADIENTS_2D[e] * m + SIMPLEX_GRADIENTS_2D[e + 1] * h);
 		}
 		return v * 70;
 	}
 };
-
-export { SimplexNoise, am, cm, im, om, sm };
+export {
+	SimplexNoise,
+	createSeededRandom,
+	SIMPLEX_UNSKEW_2D,
+	hashSeedIntegers,
+	SIMPLEX_GRADIENTS_2D,
+	SIMPLEX_SKEW_2D,
+};

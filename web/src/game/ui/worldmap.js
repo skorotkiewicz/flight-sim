@@ -1,9 +1,9 @@
-var Zp = `#2b1d1a`;
-var Qp = `#fff6dd`;
-var $p = `#2a9d8f`;
-var em = `#f2b134`;
-var tm = `"Baloo 2", "Trebuchet MS", sans-serif`;
-function nm(e) {
+var WORLD_MAP_OUTLINE_COLOR = `#2b1d1a`;
+var WORLD_MAP_PANEL_COLOR = `#fff6dd`;
+var WORLD_MAP_ROUTE_COLOR = `#2a9d8f`;
+var WORLD_MAP_DESTINATION_COLOR = `#f2b134`;
+var WORLD_MAP_FONT_FAMILY = `"Baloo 2", "Trebuchet MS", sans-serif`;
+function worldMapTerrainColor(e) {
 	if (e < 0) {
 		if (e < -25) {
 			return [70, 150, 205];
@@ -25,7 +25,7 @@ function nm(e) {
 	let t = e / 300;
 	return [150 - t * 40, 210 - t * 50, 90 - t * 20];
 }
-function rm(e, t, n, r) {
+function drawRouteMap(e, t, n, r) {
 	let i = e.width;
 	let a = e.height;
 	let o = e.getContext(`2d`);
@@ -70,7 +70,7 @@ function rm(e, t, n, r) {
 	for (let e = 0; e < _; e++) {
 		for (let t = 0; t < g; t++) {
 			let n = v[e * g + t];
-			let [r, i, a] = nm(n);
+			let [r, i, a] = worldMapTerrainColor(n);
 			let o = v[e * g + Math.max(0, t - 1)];
 			let s = v[Math.max(0, e - 1) * g + t];
 			let c =
@@ -97,7 +97,7 @@ function rm(e, t, n, r) {
 		o.translate(i.x, i.y);
 		o.rotate(r.heading);
 		o.fillStyle = n;
-		o.strokeStyle = Zp;
+		o.strokeStyle = WORLD_MAP_OUTLINE_COLOR;
 		o.lineWidth = S * 2;
 		o.fillRect(-a / 2, S * -3, a, S * 6);
 		o.strokeRect(-a / 2, S * -3, a, S * 6);
@@ -120,7 +120,7 @@ function rm(e, t, n, r) {
 			o.lineTo(n.x, n.y);
 		}
 	});
-	o.strokeStyle = Zp;
+	o.strokeStyle = WORLD_MAP_OUTLINE_COLOR;
 	o.lineWidth = S * 7;
 	o.stroke();
 	o.strokeStyle = `#ffffff`;
@@ -147,15 +147,15 @@ function rm(e, t, n, r) {
 		o.lineTo(S * -1.5, 0);
 		o.lineTo(S * -4, S * 5);
 		o.closePath();
-		o.fillStyle = $p;
-		o.strokeStyle = Zp;
+		o.fillStyle = WORLD_MAP_ROUTE_COLOR;
+		o.strokeStyle = WORLD_MAP_OUTLINE_COLOR;
 		o.lineWidth = S * 1.5;
 		o.fill();
 		o.stroke();
 		o.restore();
 	}
 	let T = (e, t, n) => {
-		o.font = `800 ${S * 13}px ${tm}`;
+		o.font = `800 ${S * 13}px ${WORLD_MAP_FONT_FAMILY}`;
 		let r = o.measureText(e).width + S * 12;
 		let a = S * 20;
 		let s = t.x - r / 2;
@@ -164,7 +164,7 @@ function rm(e, t, n, r) {
 			c = t.y + S * 14;
 		}
 		s = Math.max(S * 4, Math.min(i - r - S * 4, s));
-		o.fillStyle = Zp;
+		o.fillStyle = WORLD_MAP_OUTLINE_COLOR;
 		o.beginPath();
 		o.roundRect(s + S * 2, c + S * 2, r, a, S * 7);
 		o.fill();
@@ -172,37 +172,37 @@ function rm(e, t, n, r) {
 		o.beginPath();
 		o.roundRect(s, c, r, a, S * 7);
 		o.fill();
-		o.strokeStyle = Zp;
+		o.strokeStyle = WORLD_MAP_OUTLINE_COLOR;
 		o.lineWidth = S * 2;
 		o.stroke();
-		o.fillStyle = Zp;
+		o.fillStyle = WORLD_MAP_OUTLINE_COLOR;
 		o.textAlign = `center`;
 		o.textBaseline = `middle`;
 		o.fillText(e, s + r / 2, c + a / 2 + S);
 		o.textAlign = `left`;
 		o.textBaseline = `alphabetic`;
 	};
-	let E = C(t.airfields.indexOf(n.from), $p);
-	let D = C(t.airfields.indexOf(n.to), em);
-	T(`Home`, E, Qp);
-	T(r[t.airfields.indexOf(n.to)], D, em);
+	let E = C(t.airfields.indexOf(n.from), WORLD_MAP_ROUTE_COLOR);
+	let D = C(t.airfields.indexOf(n.to), WORLD_MAP_DESTINATION_COLOR);
+	T(`Home`, E, WORLD_MAP_PANEL_COLOR);
+	T(r[t.airfields.indexOf(n.to)], D, WORLD_MAP_DESTINATION_COLOR);
 	o.save();
 	o.translate(i - S * 22, S * 26);
-	o.fillStyle = Qp;
-	o.strokeStyle = Zp;
+	o.fillStyle = WORLD_MAP_PANEL_COLOR;
+	o.strokeStyle = WORLD_MAP_OUTLINE_COLOR;
 	o.lineWidth = S * 2;
 	o.beginPath();
 	o.arc(0, 0, S * 14, 0, Math.PI * 2);
 	o.fill();
 	o.stroke();
-	o.fillStyle = Zp;
+	o.fillStyle = WORLD_MAP_OUTLINE_COLOR;
 	o.beginPath();
 	o.moveTo(0, S * -10);
 	o.lineTo(S * -5, S * 3);
 	o.lineTo(S * 5, S * 3);
 	o.closePath();
 	o.fill();
-	o.font = `800 ${S * 9}px ${tm}`;
+	o.font = `800 ${S * 9}px ${WORLD_MAP_FONT_FAMILY}`;
 	o.textAlign = `center`;
 	o.fillText(`N`, 0, S * 11);
 	o.restore();
@@ -210,15 +210,22 @@ function rm(e, t, n, r) {
 	let k = (O * 1000) / f;
 	let A = S * 12;
 	let j = a - S * 14;
-	o.fillStyle = Qp;
-	o.strokeStyle = Zp;
+	o.fillStyle = WORLD_MAP_PANEL_COLOR;
+	o.strokeStyle = WORLD_MAP_OUTLINE_COLOR;
 	o.lineWidth = S * 2;
 	o.fillRect(A, j - S * 5, k, S * 6);
 	o.strokeRect(A, j - S * 5, k, S * 6);
-	o.fillStyle = Zp;
-	o.font = `800 ${S * 11}px ${tm}`;
+	o.fillStyle = WORLD_MAP_OUTLINE_COLOR;
+	o.font = `800 ${S * 11}px ${WORLD_MAP_FONT_FAMILY}`;
 	o.textAlign = `left`;
 	o.fillText(`${O} km`, A + k + S * 6, j + S * 1);
 }
-
-export { $p, Qp, Zp, em, nm, rm, tm };
+export {
+	WORLD_MAP_ROUTE_COLOR,
+	WORLD_MAP_PANEL_COLOR,
+	WORLD_MAP_OUTLINE_COLOR,
+	WORLD_MAP_DESTINATION_COLOR,
+	worldMapTerrainColor,
+	drawRouteMap,
+	WORLD_MAP_FONT_FAMILY,
+};

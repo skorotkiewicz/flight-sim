@@ -7,7 +7,7 @@ function isHandheld() {
 	return isTouchScreen() && Math.min(screen.width, screen.height) <= 900;
 }
 var orientationLock = null;
-function cu() {
+function readSafeAreaInsets() {
 	if (typeof document > `u`) {
 		return {
 			l: 0,
@@ -30,7 +30,7 @@ function cu() {
 		b: t(e.paddingBottom),
 	};
 }
-function lu() {
+function requestLandscapeFullscreen() {
 	let e = document.documentElement;
 	if (!document.fullscreenElement && e.requestFullscreen) {
 		e.requestFullscreen({
@@ -80,13 +80,12 @@ var TouchInput = class {
 		}
 	}
 };
-
 export {
 	TouchInput,
-	cu,
+	readSafeAreaInsets,
 	isHandheld,
 	isTouchScreen,
-	lu,
+	requestLandscapeFullscreen,
 	mediaMatches,
 	orientationLock,
 };

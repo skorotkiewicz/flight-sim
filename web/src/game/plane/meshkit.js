@@ -1,4 +1,4 @@
-import { wd } from "../app/storage.js";
+import { mergeGeometries } from "../app/storage.js";
 import {
 	BoxGeometry,
 	BufferAttribute,
@@ -16,13 +16,12 @@ import {
 	UniformsUtils,
 	Vector3,
 } from "../core/three.js";
-
-var Ed = new Color();
-var Dd = new Matrix4();
-var Od = new Quaternion();
-var kd = new Euler();
-var Ad = new Vector3();
-var jd = new Vector3();
+var meshkitColor = new Color();
+var meshkitTransform = new Matrix4();
+var meshkitQuaternion = new Quaternion();
+var meshkitEuler = new Euler();
+var meshkitPosition = new Vector3();
+var meshkitScale = new Vector3();
 function makeMesh(e, t, n = {}) {
 	let r = e.index ? e.toNonIndexed() : e;
 	if (r !== e) {
@@ -34,24 +33,24 @@ function makeMesh(e, t, n = {}) {
 	if (n.flat) {
 		r.computeVertexNormals();
 	}
-	Ad.set(...(n.pos ?? [0, 0, 0]));
-	kd.set(...(n.rot ?? [0, 0, 0]));
-	Od.setFromEuler(kd);
-	jd.set(...(n.scale ?? [1, 1, 1]));
-	Dd.compose(Ad, Od, jd);
-	r.applyMatrix4(Dd);
+	meshkitPosition.set(...(n.pos ?? [0, 0, 0]));
+	meshkitEuler.set(...(n.rot ?? [0, 0, 0]));
+	meshkitQuaternion.setFromEuler(meshkitEuler);
+	meshkitScale.set(...(n.scale ?? [1, 1, 1]));
+	meshkitTransform.compose(meshkitPosition, meshkitQuaternion, meshkitScale);
+	r.applyMatrix4(meshkitTransform);
 	let i = r.getAttribute(`position`).count;
 	let a = new Float32Array(i * 3);
-	Ed.setHex(t);
+	meshkitColor.setHex(t);
 	for (let e = 0; e < i; e++) {
-		a[e * 3] = Ed.r;
-		a[e * 3 + 1] = Ed.g;
-		a[e * 3 + 2] = Ed.b;
+		a[e * 3] = meshkitColor.r;
+		a[e * 3 + 1] = meshkitColor.g;
+		a[e * 3 + 2] = meshkitColor.b;
 	}
 	r.setAttribute(`color`, new BufferAttribute(a, 3));
 	return r;
 }
-function Md(e) {
+function addOutlineNormals(e) {
 	let t = e.getAttribute(`position`);
 	let n = e.getAttribute(`normal`);
 	let r = new Map();
@@ -75,19 +74,19 @@ function Md(e) {
 	}
 	e.setAttribute(`outlineNormal`, new BufferAttribute(a, 3));
 }
-function Nd(e) {
-	let t = wd(e, false);
+function mergeParts(e) {
+	let t = mergeGeometries(e, false);
 	if (!t) {
 		throw Error(`mergeParts: incompatible geometry attributes`);
 	}
 	for (let t of e) {
 		t.dispose();
 	}
-	Md(t);
+	addOutlineNormals(t);
 	t.computeBoundingSphere();
 	return t;
 }
-function Pd(e, t, n, r, i, a) {
+function createTaperedFuselageGeometry(e, t, n, r, i, a) {
 	let o = new BoxGeometry(e, t, n);
 	o.translate(0, 0, n / 2);
 	let s = o.getAttribute(`position`);
@@ -100,7 +99,7 @@ function Pd(e, t, n, r, i, a) {
 	o.computeVertexNormals();
 	return o;
 }
-function Fd(e, t, n) {
+function createOutlinedMesh(e, t, n) {
 	let r = new Mesh(e, t);
 	r.castShadow = true;
 	if (n) {
@@ -112,7 +111,7 @@ function Fd(e, t, n) {
 	}
 	return r;
 }
-var Id = `
+var OUTLINE_VERTEX_SHADER = `
   #include <common>
   #include <fog_pars_vertex>
   attribute vec3 outlineNormal;
@@ -134,7 +133,7 @@ var Id = `
     #include <fog_vertex>
   }
 `;
-var Ld = `
+var OUTLINE_FRAGMENT_SHADER = `
   #include <common>
   #include <fog_pars_fragment>
   uniform vec3 outlineColor;
@@ -144,7 +143,7 @@ var Ld = `
     #include <fog_fragment>
   }
 `;
-function Rd(e = 2825498, t = 1, n = 350) {
+function createOutlineMaterial(e = 2825498, t = 1, n = 350) {
 	return new ShaderMaterial({
 		uniforms: UniformsUtils.merge([
 			UniformsLib.fog,
@@ -160,16 +159,16 @@ function Rd(e = 2825498, t = 1, n = 350) {
 				},
 			},
 		]),
-		vertexShader: Id,
-		fragmentShader: Ld,
+		vertexShader: OUTLINE_VERTEX_SHADER,
+		fragmentShader: OUTLINE_FRAGMENT_SHADER,
 		side: 1,
 		fog: true,
 	});
 }
-var zd = new Map();
-function Bd(e = [100, 182, 255]) {
+var toonRampTextureCache = new Map();
+function getToonRampTexture(e = [100, 182, 255]) {
 	let t = e.join(`,`);
-	let n = zd.get(t);
+	let n = toonRampTextureCache.get(t);
 	if (n) {
 		return n;
 	}
@@ -185,14 +184,14 @@ function Bd(e = [100, 182, 255]) {
 	n.magFilter = NearestFilter;
 	n.generateMipmaps = false;
 	n.needsUpdate = true;
-	zd.set(t, n);
+	toonRampTextureCache.set(t, n);
 	return n;
 }
-function Vd(e = {}) {
+function createToonMaterial(e = {}) {
 	let t = new MeshToonMaterial({
 		color: e.color ?? 16777215,
 		vertexColors: !!e.vertexColors,
-		gradientMap: Bd(e.ramp),
+		gradientMap: getToonRampTexture(e.ramp),
 		side: e.side ?? 0,
 		fog: e.fog ?? true,
 	});
@@ -219,23 +218,22 @@ uniform float rimStrength;`,
 	t.customProgramCacheKey = () => `toon-rim-${n}`;
 	return t;
 }
-
 export {
-	Ad,
-	Bd,
-	Dd,
-	Ed,
-	Fd,
-	Id,
-	Ld,
-	Md,
-	Nd,
-	Od,
-	Pd,
-	Rd,
-	Vd,
-	jd,
-	kd,
+	meshkitPosition,
+	getToonRampTexture,
+	meshkitTransform,
+	meshkitColor,
+	createOutlinedMesh,
+	OUTLINE_VERTEX_SHADER,
+	OUTLINE_FRAGMENT_SHADER,
+	addOutlineNormals,
+	mergeParts,
+	meshkitQuaternion,
+	createTaperedFuselageGeometry,
+	createOutlineMaterial,
+	createToonMaterial,
+	meshkitScale,
+	meshkitEuler,
 	makeMesh,
-	zd,
+	toonRampTextureCache,
 };

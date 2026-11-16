@@ -1,5 +1,10 @@
-import { Dh, Eh, Oh, Th, kh } from "./sw.js";
-
+import {
+	preloadPromiseCache,
+	resolvePreloadAssetPath,
+	isStylesheetUrl,
+	MODULE_PRELOAD_REL,
+	deduplicatePreload,
+} from "./sw.js";
 function loadModule(e, t, n) {
 	let r = Promise.resolve();
 	if (t && t.length > 0) {
@@ -32,10 +37,10 @@ function loadModule(e, t, n) {
 		r = o(
 			t
 				.map((t) => {
-					t = Eh(t, n);
+					t = resolvePreloadAssetPath(t, n);
 					let r = s(t);
-					let i = Oh(r);
-					return kh(Dh, r.href, () => {
+					let i = isStylesheetUrl(r);
+					return deduplicatePreload(preloadPromiseCache, r.href, () => {
 						if (e === undefined) {
 							e = {
 								all: new Set(),
@@ -54,7 +59,7 @@ function loadModule(e, t, n) {
 							return;
 						}
 						let t = document.createElement(`link`);
-						t.rel = i ? `stylesheet` : Th;
+						t.rel = i ? `stylesheet` : MODULE_PRELOAD_REL;
 						if (!i) {
 							t.as = `script`;
 						}
@@ -103,5 +108,4 @@ function loadModule(e, t, n) {
 		return e().catch(i);
 	});
 }
-
 export { loadModule };

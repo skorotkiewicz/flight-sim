@@ -1,6 +1,10 @@
-import { Sd, randomSeed, xd, yd } from "../app/storage.js";
-
-var $ = (e) => document.getElementById(e);
+import {
+	getBestScore,
+	randomSeed,
+	getScoreStorageKey,
+	saveSettings,
+} from "../app/storage.js";
+var getMenuElement = (e) => document.getElementById(e);
 var MEDALS = [`🎈`, `🥉`, `🥈`, `🥇`];
 var SettingsPanel = class {
 	settings;
@@ -18,11 +22,11 @@ var SettingsPanel = class {
 				t.modeChanged();
 			},
 		);
-		$(`dest-prev`).addEventListener(`click`, () => {
+		getMenuElement(`dest-prev`).addEventListener(`click`, () => {
 			t.click();
 			t.destStep(-1);
 		});
-		$(`dest-next`).addEventListener(`click`, () => {
+		getMenuElement(`dest-next`).addEventListener(`click`, () => {
 			t.click();
 			t.destStep(1);
 		});
@@ -39,52 +43,58 @@ var SettingsPanel = class {
 				t.qualityChanged();
 			},
 		);
-		let n = $(`seed-input`);
+		let n = getMenuElement(`seed-input`);
 		n.value = String(e.seed);
 		n.addEventListener(`change`, () => {
 			let r = parseInt(n.value.replace(/\D/g, ``), 10);
 			if (Number.isFinite(r) && r > 0) {
 				e.seed = r;
-				yd(e);
+				saveSettings(e);
 				t.seedChanged(r);
 			} else {
 				n.value = String(e.seed);
 			}
 			this.refreshBest();
 		});
-		$(`seed-roll`).addEventListener(`click`, () => {
+		getMenuElement(`seed-roll`).addEventListener(`click`, () => {
 			t.click();
 			e.seed = randomSeed();
 			n.value = String(e.seed);
-			yd(e);
+			saveSettings(e);
 			t.seedChanged(e.seed);
 			this.refreshBest();
 		});
-		$(`fly-btn`).addEventListener(`click`, () => t.fly());
-		$(`resume-btn`).addEventListener(`click`, () => t.resume());
-		$(`restart-btn`).addEventListener(`click`, () => t.restart());
-		$(`quit-btn`).addEventListener(`click`, () => t.quit());
-		$(`again-btn`).addEventListener(`click`, () => t.again());
-		$(`newworld-btn`).addEventListener(`click`, () => t.newWorld());
-		$(`hangar-btn`).addEventListener(`click`, () => t.quit());
-		$(`open-hangar`).addEventListener(`click`, () => t.openHangar());
-		$(`close-hangar`).addEventListener(`click`, () => t.closeHangar());
-		let r = $(`volume`);
+		getMenuElement(`fly-btn`).addEventListener(`click`, () => t.fly());
+		getMenuElement(`resume-btn`).addEventListener(`click`, () => t.resume());
+		getMenuElement(`restart-btn`).addEventListener(`click`, () => t.restart());
+		getMenuElement(`quit-btn`).addEventListener(`click`, () => t.quit());
+		getMenuElement(`again-btn`).addEventListener(`click`, () => t.again());
+		getMenuElement(`newworld-btn`).addEventListener(`click`, () =>
+			t.newWorld(),
+		);
+		getMenuElement(`hangar-btn`).addEventListener(`click`, () => t.quit());
+		getMenuElement(`open-hangar`).addEventListener(`click`, () =>
+			t.openHangar(),
+		);
+		getMenuElement(`close-hangar`).addEventListener(`click`, () =>
+			t.closeHangar(),
+		);
+		let r = getMenuElement(`volume`);
 		r.value = String(e.volume);
 		r.addEventListener(`input`, () => {
 			e.volume = parseFloat(r.value);
-			yd(e);
+			saveSettings(e);
 			t.volumeChanged(e.volume);
 		});
-		let i = $(`shake`);
+		let i = getMenuElement(`shake`);
 		i.checked = e.cameraShake;
 		i.addEventListener(`change`, () => {
 			e.cameraShake = i.checked;
-			yd(e);
+			saveSettings(e);
 		});
-		let a = $(`tilt`);
-		let o = $(`tilt-note`);
-		let s = $(`recentre-btn`);
+		let a = getMenuElement(`tilt`);
+		let o = getMenuElement(`tilt-note`);
+		let s = getMenuElement(`recentre-btn`);
 		let c = () => s.classList.toggle(`hidden`, !a.checked);
 		a.checked = e.tilt;
 		c();
@@ -103,7 +113,7 @@ var SettingsPanel = class {
 					o.textContent = ``;
 				}
 				e.tilt = a.checked;
-				yd(e);
+				saveSettings(e);
 				c();
 			});
 		});
@@ -115,23 +125,23 @@ var SettingsPanel = class {
 				2500,
 			);
 		});
-		let l = $(`invert`);
+		let l = getMenuElement(`invert`);
 		l.checked = e.invertPitch;
 		l.addEventListener(`change`, () => {
 			e.invertPitch = l.checked;
-			yd(e);
+			saveSettings(e);
 		});
 		this.refreshBest();
 	}
 	bindSeg(e, t, n) {
-		let r = $(e);
+		let r = getMenuElement(e);
 		let i = Array.from(r.querySelectorAll(`button`));
 		let a = () =>
 			i.forEach((e) => e.classList.toggle(`on`, e.dataset.v === t()));
 		i.forEach((e) =>
 			e.addEventListener(`click`, () => {
 				n(e.dataset.v);
-				yd(this.settings);
+				saveSettings(this.settings);
 				this.h.click();
 				a();
 				this.refreshBest();
@@ -141,25 +151,25 @@ var SettingsPanel = class {
 	}
 	refreshBest() {
 		let e = this.settings;
-		let t = Sd(xd(e.seed, e.mode, e.dest));
+		let t = getBestScore(getScoreStorageKey(e.seed, e.mode, e.dest));
 		let n = e.mode === `route` ? `Best on this route` : `Best on this world`;
 		let r = t?.path === undefined ? `` : `, ${t.path}% on the path`;
-		$(`best-line`).textContent = t
+		getMenuElement(`best-line`).textContent = t
 			? `${n}: ${MEDALS[t.medal]} landing ${t.landing}${r}`
 			: ``;
 	}
 	setRoutePanel(e) {
-		$(`route-panel`).classList.toggle(`hidden`, !e);
+		getMenuElement(`route-panel`).classList.toggle(`hidden`, !e);
 	}
 	setRouteInfo(e, t) {
-		$(`dest-name`).textContent = e;
-		$(`route-info`).textContent = t;
+		getMenuElement(`dest-name`).textContent = e;
+		getMenuElement(`route-info`).textContent = t;
 	}
 	get routeCanvas() {
-		return $(`route-map`);
+		return getMenuElement(`route-map`);
 	}
 	setSeed(e) {
-		$(`seed-input`).value = String(e);
+		getMenuElement(`seed-input`).value = String(e);
 		this.refreshBest();
 	}
 	show(e) {
@@ -172,19 +182,19 @@ var SettingsPanel = class {
 			`nogl`,
 			`ctxlost`,
 		]) {
-			$(t).classList.toggle(`hidden`, t !== e);
+			getMenuElement(t).classList.toggle(`hidden`, t !== e);
 		}
 	}
 	setAircraft(e) {
-		$(`aircraft-name`).textContent = e;
+		getMenuElement(`aircraft-name`).textContent = e;
 	}
 	setLoading(e) {
-		$(`load-bar`).style.width = `${Math.round(e * 100)}%`;
+		getMenuElement(`load-bar`).style.width = `${Math.round(e * 100)}%`;
 	}
 	showDebrief(e) {
-		$(`debrief-title`).textContent = e.title;
-		$(`medal`).textContent = MEDALS[e.medal];
-		let t = $(`debrief-stats`);
+		getMenuElement(`debrief-title`).textContent = e.title;
+		getMenuElement(`medal`).textContent = MEDALS[e.medal];
+		let t = getMenuElement(`debrief-stats`);
 		t.innerHTML = ``;
 		for (let [n, r] of e.rows) {
 			let e = document.createElement(`tr`);
@@ -207,28 +217,27 @@ var SettingsPanel = class {
 		this.show(`debrief`);
 	}
 	toast(e, t = 1600) {
-		let n = $(`toast`);
+		let n = getMenuElement(`toast`);
 		n.textContent = e;
 		n.classList.add(`show`);
 		clearTimeout(this.toastTimer);
 		this.toastTimer = window.setTimeout(() => n.classList.remove(`show`), t);
 	}
 	hint(e, t = 4500) {
-		let n = $(`hint`);
+		let n = getMenuElement(`hint`);
 		n.textContent = e;
 		n.classList.add(`show`);
 		clearTimeout(this.hintTimer);
 		this.hintTimer = window.setTimeout(() => n.classList.remove(`show`), t);
 	}
 	clearHint() {
-		$(`hint`).classList.remove(`show`);
+		getMenuElement(`hint`).classList.remove(`show`);
 	}
 	setWhiteout(e) {
-		$(`whiteout`).style.opacity = String(e);
+		getMenuElement(`whiteout`).style.opacity = String(e);
 	}
 	setHurt(e) {
-		$(`hurt`).style.opacity = String(e);
+		getMenuElement(`hurt`).style.opacity = String(e);
 	}
 };
-
-export { $, MEDALS, SettingsPanel };
+export { getMenuElement, MEDALS, SettingsPanel };

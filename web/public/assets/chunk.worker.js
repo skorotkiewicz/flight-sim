@@ -1,4 +1,4 @@
-function e(...e) {
+function hashSeedIntegers(...e) {
 	let t = 2166136261;
 	for (let n = 0; n < e.length; n++) {
 		let r = Math.imul((e[n] | 0) ^ 2654435769, 2246822507);
@@ -11,7 +11,7 @@ function e(...e) {
 	}
 	return t >>> 0;
 }
-function t(e) {
+function createSeededRandom(e) {
 	let t = e >>> 0;
 	return () => {
 		t = (t + 1831565813) | 0;
@@ -22,18 +22,18 @@ function t(e) {
 		);
 	};
 }
-const n = new Float32Array([
+const SIMPLEX_GRADIENTS_2D = new Float32Array([
 		1, 1, -1, 1, 1, -1, -1, -1, 1, 0, -1, 0, 1, 0, -1, 0, 0, 1, 0, -1, 0, 1, 0,
 		-1,
 	]),
-	r = 0.5 * (Math.sqrt(3) - 1),
-	i = (3 - Math.sqrt(3)) / 6;
-var a = class {
-	perm = /* @__PURE__ */ new Uint8Array(512);
-	permMod12 = /* @__PURE__ */ new Uint8Array(512);
+	SIMPLEX_SKEW_2D = 0.5 * (Math.sqrt(3) - 1),
+	SIMPLEX_UNSKEW_2D = (3 - Math.sqrt(3)) / 6;
+var SimplexNoise = class {
+	perm = new Uint8Array(512);
+	permMod12 = new Uint8Array(512);
 	constructor(e) {
-		let n = t(e),
-			r = /* @__PURE__ */ new Uint8Array(256);
+		let n = createSeededRandom(e),
+			r = new Uint8Array(256);
 		for (let e = 0; e < 256; e++) r[e] = e;
 		for (let e = 255; e > 0; e--) {
 			let t = Math.floor(n() * (e + 1)),
@@ -46,74 +46,91 @@ var a = class {
 	noise(e, t) {
 		let a = this.perm,
 			o = this.permMod12,
-			s = (e + t) * r,
+			s = (e + t) * SIMPLEX_SKEW_2D,
 			c = Math.floor(e + s),
 			l = Math.floor(t + s),
-			u = (c + l) * i,
+			u = (c + l) * SIMPLEX_UNSKEW_2D,
 			d = e - (c - u),
 			f = t - (l - u),
 			p = +(d > f),
 			m = d > f ? 0 : 1,
-			h = d - p + i,
-			g = f - m + i,
-			_ = d - 1 + 2 * i,
-			v = f - 1 + 2 * i,
+			h = d - p + SIMPLEX_UNSKEW_2D,
+			g = f - m + SIMPLEX_UNSKEW_2D,
+			_ = d - 1 + 2 * SIMPLEX_UNSKEW_2D,
+			v = f - 1 + 2 * SIMPLEX_UNSKEW_2D,
 			y = c & 255,
 			b = l & 255,
 			x = 0,
 			S = 0.5 - d * d - f * f;
 		if (S > 0) {
 			let e = o[y + a[b]] * 2;
-			(S *= S), (x += S * S * (n[e] * d + n[e + 1] * f));
+			(S *= S),
+				(x +=
+					S *
+					S *
+					(SIMPLEX_GRADIENTS_2D[e] * d + SIMPLEX_GRADIENTS_2D[e + 1] * f));
 		}
 		let C = 0.5 - h * h - g * g;
 		if (C > 0) {
 			let e = o[y + p + a[b + m]] * 2;
-			(C *= C), (x += C * C * (n[e] * h + n[e + 1] * g));
+			(C *= C),
+				(x +=
+					C *
+					C *
+					(SIMPLEX_GRADIENTS_2D[e] * h + SIMPLEX_GRADIENTS_2D[e + 1] * g));
 		}
 		let w = 0.5 - _ * _ - v * v;
 		if (w > 0) {
 			let e = o[y + 1 + a[b + 1]] * 2;
-			(w *= w), (x += w * w * (n[e] * _ + n[e + 1] * v));
+			(w *= w),
+				(x +=
+					w *
+					w *
+					(SIMPLEX_GRADIENTS_2D[e] * _ + SIMPLEX_GRADIENTS_2D[e + 1] * v));
 		}
 		return 70 * x;
 	}
 };
-const o = { paved: 900, pavedWidth: 30, overrun: 60, shoulder: 15 },
-	s = (e, t, n) => (e < t ? t : e > n ? n : e);
-function c(e, t, n) {
-	let r = s((n - e) / (t - e), 0, 1);
+const RUNWAY_DIMENSIONS = {
+		paved: 900,
+		pavedWidth: 30,
+		overrun: 60,
+		shoulder: 15,
+	},
+	clampTerrainValue = (e, t, n) => (e < t ? t : e > n ? n : e);
+function terrainSmoothstep(e, t, n) {
+	let r = clampTerrainValue((n - e) / (t - e), 0, 1);
 	return r * r * (3 - 2 * r);
 }
-function l(e) {
+function hexToLinearRgb(e) {
 	let t = (e) => (
 		(e /= 255), e <= 0.04045 ? e / 12.92 : ((e + 0.055) / 1.055) ** 2.4
 	);
 	return [t((e >> 16) & 255), t((e >> 8) & 255), t(e & 255)];
 }
-const u = {
-	deep: l(1925011),
-	shallow: l(3981519),
-	foam: l(16055295),
-	sand: l(15915158),
-	meadow: l(8831567),
-	meadow2: l(7977034),
-	airfield: l(9226070),
-	forest: l(4099900),
-	forest2: l(5086778),
-	rock: l(11049612),
-	rockDark: l(9207154),
-	snow: l(16514559),
+const TERRAIN_PALETTE = {
+	deep: hexToLinearRgb(1925011),
+	shallow: hexToLinearRgb(3981519),
+	foam: hexToLinearRgb(16055295),
+	sand: hexToLinearRgb(15915158),
+	meadow: hexToLinearRgb(8831567),
+	meadow2: hexToLinearRgb(7977034),
+	airfield: hexToLinearRgb(9226070),
+	forest: hexToLinearRgb(4099900),
+	forest2: hexToLinearRgb(5086778),
+	rock: hexToLinearRgb(11049612),
+	rockDark: hexToLinearRgb(9207154),
+	snow: hexToLinearRgb(16514559),
 	farm: [
-		l(13029728),
-		l(9682764),
-		l(14466402),
-		l(7844168),
-		l(11389292),
-		l(13608544),
+		hexToLinearRgb(13029728),
+		hexToLinearRgb(9682764),
+		hexToLinearRgb(14466402),
+		hexToLinearRgb(7844168),
+		hexToLinearRgb(11389292),
+		hexToLinearRgb(13608544),
 	],
 };
-var d = class {
+var Terrain = class {
 	seed;
 	airfields;
 	nCont;
@@ -126,14 +143,14 @@ var d = class {
 	nVar;
 	constructor(t) {
 		(this.seed = t),
-			(this.nCont = new a(e(t, 1))),
-			(this.nHill = new a(e(t, 2))),
-			(this.nMask = new a(e(t, 3))),
-			(this.nRidge = new a(e(t, 4))),
-			(this.nWarp = new a(e(t, 5))),
-			(this.nForest = new a(e(t, 7))),
-			(this.nFarm = new a(e(t, 8))),
-			(this.nVar = new a(e(t, 9))),
+			(this.nCont = new SimplexNoise(hashSeedIntegers(t, 1))),
+			(this.nHill = new SimplexNoise(hashSeedIntegers(t, 2))),
+			(this.nMask = new SimplexNoise(hashSeedIntegers(t, 3))),
+			(this.nRidge = new SimplexNoise(hashSeedIntegers(t, 4))),
+			(this.nWarp = new SimplexNoise(hashSeedIntegers(t, 5))),
+			(this.nForest = new SimplexNoise(hashSeedIntegers(t, 7))),
+			(this.nFarm = new SimplexNoise(hashSeedIntegers(t, 8))),
+			(this.nVar = new SimplexNoise(hashSeedIntegers(t, 9))),
 			(this.airfields = []),
 			this.placeAirfields();
 	}
@@ -165,7 +182,8 @@ var d = class {
 			a = 55 + i * 330;
 		a += this.fbm(this.nHill, n / 1500, r / 1500, 4) * 48;
 		let o =
-			c(0.05, 0.55, this.nMask.noise(n / 8e3, r / 8e3)) * c(-0.05, 0.25, i);
+			terrainSmoothstep(0.05, 0.55, this.nMask.noise(n / 8e3, r / 8e3)) *
+			terrainSmoothstep(-0.05, 0.25, i);
 		if (o > 0) {
 			let e = this.ridged(this.nRidge, n / 2400, r / 2400, 4);
 			a += o * e ** 1.5 * 640;
@@ -174,7 +192,7 @@ var d = class {
 			let e = (a - 4) / 16,
 				t = Math.floor(e),
 				n = e - t;
-			a = 4 + (t + n * 0.45 + c(0.3, 0.7, n) * 0.55) * 16;
+			a = 4 + (t + n * 0.45 + terrainSmoothstep(0.3, 0.7, n) * 0.55) * 16;
 		}
 		return a;
 	}
@@ -187,7 +205,7 @@ var d = class {
 			s = -r * e.dirZ + i * e.dirX,
 			l = Math.max(Math.abs(o) - (e.length / 2 + 40), 0),
 			u = Math.max(Math.abs(s) - 110, 0);
-		return 1 - c(0, 260, Math.sqrt(l * l + u * u));
+		return 1 - terrainSmoothstep(0, 260, Math.sqrt(l * l + u * u));
 	}
 	fieldMask(e, t) {
 		let n = 0;
@@ -210,15 +228,19 @@ var d = class {
 	forestDensity(e, t, n, r, i) {
 		return n < 3
 			? 0
-			: c(0.04, 0.28, this.fbm(this.nForest, e / 1800, t / 1800, 3)) *
-					(1 - c(0.35, 0.5, r)) *
-					(1 - c(320, 430, n)) *
-					(1 - c(0, 0.3, i));
+			: terrainSmoothstep(
+					0.04,
+					0.28,
+					this.fbm(this.nForest, e / 1800, t / 1800, 3),
+				) *
+					(1 - terrainSmoothstep(0.35, 0.5, r)) *
+					(1 - terrainSmoothstep(320, 430, n)) *
+					(1 - terrainSmoothstep(0, 0.3, i));
 	}
 	farmMask(e, t, n, r) {
 		return n < 5 || n > 170 || r > 0.22
 			? 0
-			: c(-0.05, 0.12, this.nFarm.noise(e / 5e3, t / 5e3));
+			: terrainSmoothstep(-0.05, 0.12, this.nFarm.noise(e / 5e3, t / 5e3));
 	}
 	farmCell(t, n) {
 		let r = Math.floor(t / 230),
@@ -229,7 +251,7 @@ var d = class {
 			for (let c = -1; c <= 1; c++) {
 				let l = r + c,
 					u = i + s,
-					d = e(this.seed, l, u, 31),
+					d = hashSeedIntegers(this.seed, l, u, 31),
 					f = (l + (d & 65535) / 65536) * 230,
 					p = (u + ((d >>> 16) & 65535) / 65536) * 230,
 					m = (f - t) * (f - t) + (p - n) * (p - n);
@@ -244,31 +266,40 @@ var d = class {
 		let o,
 			s = 1 - r;
 		if (n < -0.6) {
-			let e = c(-0.6, -9, n);
-			(i[a] = u.shallow[0] + (u.deep[0] - u.shallow[0]) * e),
-				(i[a + 1] = u.shallow[1] + (u.deep[1] - u.shallow[1]) * e),
-				(i[a + 2] = u.shallow[2] + (u.deep[2] - u.shallow[2]) * e);
+			let e = terrainSmoothstep(-0.6, -9, n);
+			(i[a] =
+				TERRAIN_PALETTE.shallow[0] +
+				(TERRAIN_PALETTE.deep[0] - TERRAIN_PALETTE.shallow[0]) * e),
+				(i[a + 1] =
+					TERRAIN_PALETTE.shallow[1] +
+					(TERRAIN_PALETTE.deep[1] - TERRAIN_PALETTE.shallow[1]) * e),
+				(i[a + 2] =
+					TERRAIN_PALETTE.shallow[2] +
+					(TERRAIN_PALETTE.deep[2] - TERRAIN_PALETTE.shallow[2]) * e);
 			return;
 		}
-		if (n < 0.6) o = u.foam;
-		else if (n < 5 && s < 0.2) o = u.sand;
-		else if (s > 0.42) o = s > 0.58 ? u.rockDark : u.rock;
+		if (n < 0.6) o = TERRAIN_PALETTE.foam;
+		else if (n < 5 && s < 0.2) o = TERRAIN_PALETTE.sand;
+		else if (s > 0.42)
+			o = s > 0.58 ? TERRAIN_PALETTE.rockDark : TERRAIN_PALETTE.rock;
 		else if (n > 440 + 70 * this.nVar.noise(e / 400, t / 400))
-			o = s < 0.3 ? u.snow : u.rock;
+			o = s < 0.3 ? TERRAIN_PALETTE.snow : TERRAIN_PALETTE.rock;
 		else {
 			let r = this.fieldMask(e, t);
 			o =
 				r > 0.45
-					? u.airfield
+					? TERRAIN_PALETTE.airfield
 					: this.forestDensity(e, t, n, s, r) > 0.45
 						? this.nVar.noise(e / 300, t / 300) > 0
-							? u.forest
-							: u.forest2
+							? TERRAIN_PALETTE.forest
+							: TERRAIN_PALETTE.forest2
 						: this.farmMask(e, t, n, s) > 0.5 && r < 0.05
-							? u.farm[this.farmCell(e, t) % u.farm.length]
+							? TERRAIN_PALETTE.farm[
+									this.farmCell(e, t) % TERRAIN_PALETTE.farm.length
+								]
 							: this.nVar.noise(e / 900, t / 900) > 0.1
-								? u.meadow2
-								: u.meadow;
+								? TERRAIN_PALETTE.meadow2
+								: TERRAIN_PALETTE.meadow;
 		}
 		let l = 1 + 0.06 * this.nVar.noise(e / 160 + 50, t / 160);
 		(i[a] = o[0] * l), (i[a + 1] = o[1] * l), (i[a + 2] = o[2] * l);
@@ -292,11 +323,20 @@ var d = class {
 		return (
 			a < 10 && (u += 1e3 + (10 - a) * 5),
 			l > 200 && (u += (l - 200) * 0.6),
-			{ score: u, mean: l }
+			{
+				score: u,
+				mean: l,
+			}
 		);
 	}
 	searchField(e, t, n, r, i, a, s) {
-		let c = { score: 1 / 0, x: e, z: t, heading: 0, mean: 20 };
+		let c = {
+			score: 1 / 0,
+			x: e,
+			z: t,
+			heading: 0,
+			mean: 20,
+		};
 		for (let a = -n; a <= n; a += r)
 			for (let o = -n; o <= n; o += r) {
 				if (o * o + a * a > n * n) continue;
@@ -305,7 +345,13 @@ var d = class {
 					let r = this.scoreSite(e + o, t + a, n),
 						i = r.score + Math.hypot(o, a) * 0.004;
 					i < c.score &&
-						(c = { score: i, x: e + o, z: t + a, heading: n, mean: r.mean });
+						(c = {
+							score: i,
+							x: e + o,
+							z: t + a,
+							heading: n,
+							mean: r.mean,
+						});
 				}
 			}
 		return {
@@ -316,10 +362,10 @@ var d = class {
 				heading: c.heading,
 				dirX: Math.cos(c.heading),
 				dirZ: Math.sin(c.heading),
-				length: o.paved + 2 * o.overrun,
-				width: o.pavedWidth + 2 * o.shoulder,
-				paved: o.paved,
-				pavedWidth: o.pavedWidth,
+				length: RUNWAY_DIMENSIONS.paved + 2 * RUNWAY_DIMENSIONS.overrun,
+				width: RUNWAY_DIMENSIONS.pavedWidth + 2 * RUNWAY_DIMENSIONS.shoulder,
+				paved: RUNWAY_DIMENSIONS.paved,
+				pavedWidth: RUNWAY_DIMENSIONS.pavedWidth,
 				height: Math.max(c.mean, 9),
 				home: s,
 			},
@@ -327,7 +373,7 @@ var d = class {
 		};
 	}
 	placeAirfields() {
-		let n = t(e(this.seed, 99)),
+		let n = createSeededRandom(hashSeedIntegers(this.seed, 99)),
 			r = this.searchField(0, 0, 1800, 150, n, 0, !0);
 		r.score >= 1e3 && (r = this.searchField(0, 0, 7e3, 450, n, 0, !0)),
 			this.airfields.push(r.af);
@@ -382,10 +428,13 @@ var d = class {
 			let a = Math.hypot(i.x - e, i.z - t);
 			a < r && ((r = a), (n = i));
 		}
-		return { af: n, dist: r };
+		return {
+			af: n,
+			dist: r,
+		};
 	}
 };
-function f(e, t) {
+function buildTerrainChunk(e, t) {
 	let { cx: n, cz: r, res: i } = t,
 		a = 512 / i,
 		o = n * 512,
@@ -466,7 +515,9 @@ function f(e, t) {
 			(y[b++] = t),
 			(y[b++] = r);
 	}
-	let x = t.props ? p(e, t.seed, n, r) : /* @__PURE__ */ new Float32Array();
+	let x = t.props
+		? scatterChunkProps(e, t.seed, n, r)
+		: new Float32Array();
 	return {
 		id: t.id,
 		cx: n,
@@ -480,11 +531,11 @@ function f(e, t) {
 		hasProps: t.props,
 	};
 }
-function p(n, r, i, a) {
+function scatterChunkProps(n, r, i, a) {
 	let o = [],
 		s = i * 512,
 		c = a * 512,
-		l = t(e(r, i, a, 4242));
+		l = createSeededRandom(hashSeedIntegers(r, i, a, 4242));
 	for (let e = 0; e < 512; e += 22)
 		for (let t = 0; t < 512; t += 22) {
 			let r = t + l() * 22,
@@ -523,13 +574,14 @@ function p(n, r, i, a) {
 		}
 	return new Float32Array(o);
 }
-let m = null;
-const h = self;
-h.onmessage = (e) => {
+let cachedTerrain = null;
+const workerScope = self;
+workerScope.onmessage = (e) => {
 	let t = e.data;
-	(m && m.seed === t.seed) || (m = new d(t.seed));
-	let n = f(m, t);
-	h.postMessage(n, [
+	(cachedTerrain && cachedTerrain.seed === t.seed) ||
+		(cachedTerrain = new Terrain(t.seed));
+	let n = buildTerrainChunk(cachedTerrain, t);
+	workerScope.postMessage(n, [
 		n.positions.buffer,
 		n.normals.buffer,
 		n.colors.buffer,

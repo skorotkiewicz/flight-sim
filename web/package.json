@@ -6,13 +6,15 @@
 	"scripts": {
 		"dev": "vite",
 		"build": "vite build",
-		"preview": "vite preview"
+		"preview": "vite preview",
+		"lint": "biome lint --write --max-diagnostics 1000",
+		"lint:unsafe": "biome lint --write --unsafe --max-diagnostics 1000"
 	},
 	"devDependencies": {
 		"vite": "^8.3.6"
 	},
 	"dependencies": {
 		"lil-gui": "^0.21.0",
-		"three": "0.187.0"
+		"three": "^0.187.0"
 	}
 }

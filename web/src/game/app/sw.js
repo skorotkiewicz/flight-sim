@@ -1,12 +1,12 @@
-var Th = `modulepreload`;
-function Eh(e) {
+var MODULE_PRELOAD_REL = `modulepreload`;
+function resolvePreloadAssetPath(e) {
 	return `/${e}`;
 }
-var Dh = {};
-function Oh(e) {
+var preloadPromiseCache = {};
+function isStylesheetUrl(e) {
 	return e.pathname.endsWith(`.css`);
 }
-function kh(e, t, n) {
+function deduplicatePreload(e, t, n) {
 	if (t in e) {
 		return e[t];
 	}
@@ -27,5 +27,10 @@ function kh(e, t, n) {
 	e[t] = i;
 	return i;
 }
-
-export { Dh, Eh, Oh, Th, kh };
+export {
+	preloadPromiseCache,
+	resolvePreloadAssetPath,
+	isStylesheetUrl,
+	MODULE_PRELOAD_REL,
+	deduplicatePreload,
+};

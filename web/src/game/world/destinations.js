@@ -1,5 +1,11 @@
-import { Md, Nd, Rd, Vd, makeMesh } from "../plane/meshkit.js";
-import { SimplexNoise, am, im } from "./noise.js";
+import {
+	addOutlineNormals,
+	mergeParts,
+	createOutlineMaterial,
+	createToonMaterial,
+	makeMesh,
+} from "../plane/meshkit.js";
+import { SimplexNoise, createSeededRandom, hashSeedIntegers } from "./noise.js";
 import {
 	BoxGeometry,
 	ConeGeometry,
@@ -12,11 +18,10 @@ import {
 	Quaternion,
 	Vector3,
 } from "../core/three.js";
-
-var Mm = 200;
-var Nm = 260;
-var Pm = 1600;
-var Fm = 5000;
+var CLOUD_BASE_CLEARANCE = 200;
+var CLOUD_ALTITUDE_VARIATION = 260;
+var CLOUD_CELL_SIZE = 1600;
+var MAX_CLOUD_SPHERES = 5000;
 var Weather = class {
 	seed;
 	ground;
@@ -24,7 +29,7 @@ var Weather = class {
 	mesh;
 	outline;
 	noise;
-	spheres = new Float32Array(Fm * 4);
+	spheres = new Float32Array(MAX_CLOUD_SPHERES * 4);
 	count = 0;
 	lastCell = {
 		x: 1000000000,
@@ -36,19 +41,23 @@ var Weather = class {
 	constructor(e, t, n = () => 0) {
 		this.seed = e;
 		this.ground = n;
-		this.noise = new SimplexNoise(im(e, 555));
+		this.noise = new SimplexNoise(hashSeedIntegers(e, 555));
 		this.cover = t === `clear` ? -0.45 : t === `overcast` ? 0.45 : 0;
 		let r = new IcosahedronGeometry(1, 1);
-		Md(r);
-		let i = Vd({
+		addOutlineNormals(r);
+		let i = createToonMaterial({
 			color: 16777215,
 			ramp: [196, 236, 255],
 			rim: 0.12,
 		});
-		this.mesh = new InstancedMesh(r, i, Fm);
+		this.mesh = new InstancedMesh(r, i, MAX_CLOUD_SPHERES);
 		this.mesh.count = 0;
 		this.mesh.frustumCulled = false;
-		this.outline = new InstancedMesh(r, Rd(9413575, 1.2, 2500), Fm);
+		this.outline = new InstancedMesh(
+			r,
+			createOutlineMaterial(9413575, 1.2, 2500),
+			MAX_CLOUD_SPHERES,
+		);
 		this.outline.instanceMatrix = this.mesh.instanceMatrix;
 		this.outline.count = 0;
 		this.outline.frustumCulled = false;
@@ -69,18 +78,21 @@ var Weather = class {
 				}
 				let u = e + l;
 				let d = t + c;
-				let f = am(im(this.seed, u, d, 777));
+				let f = createSeededRandom(hashSeedIntegers(this.seed, u, d, 777));
 				let p = this.noise.noise(u * 0.31, d * 0.31) + this.cover;
 				let m = Math.max(0, Math.floor((p + 0.55) * 2.6 + f() * 0.9));
 				for (let e = 0; e < m; e++) {
-					let e = (u + f()) * Pm;
-					let t = (d + f()) * Pm;
-					let s = Math.max(this.ground(e, t), 0) + Mm + f() * Nm;
+					let e = (u + f()) * CLOUD_CELL_SIZE;
+					let t = (d + f()) * CLOUD_CELL_SIZE;
+					let s =
+						Math.max(this.ground(e, t), 0) +
+						CLOUD_BASE_CLEARANCE +
+						f() * CLOUD_ALTITUDE_VARIATION;
 					let c = 110 + f() * 230;
 					let l = 6 + Math.floor(f() * 9);
 					let p = 1 + f() * 0.8;
 					let m = f() * Math.PI;
-					for (let u = 0; u < l && o < Fm; u++) {
+					for (let u = 0; u < l && o < MAX_CLOUD_SPHERES; u++) {
 						let l = f() * Math.PI * 2;
 						let u = Math.sqrt(f()) * c;
 						let d = Math.cos(l) * u * p;
@@ -119,8 +131,8 @@ var Weather = class {
 		this.group.position.set(this.drift.x, 0, this.drift.z);
 		let r = e.x - this.drift.x;
 		let i = e.z - this.drift.z;
-		let a = Math.floor(r / Pm);
-		let o = Math.floor(i / Pm);
+		let a = Math.floor(r / CLOUD_CELL_SIZE);
+		let o = Math.floor(i / CLOUD_CELL_SIZE);
 		if (a !== this.lastCell.x || o !== this.lastCell.z) {
 			this.lastCell = {
 				x: a,
@@ -164,8 +176,8 @@ var Weather = class {
 		this.mesh.dispose();
 	}
 };
-function Lm() {
-	return Nd([
+function createConiferGeometry() {
+	return mergeParts([
 		makeMesh(new CylinderGeometry(0.35, 0.45, 3, 6), 8014634, {
 			pos: [0, 1.5, 0],
 		}),
@@ -183,8 +195,8 @@ function Lm() {
 		}),
 	]);
 }
-function Rm() {
-	return Nd([
+function createDeciduousTreeGeometry() {
+	return mergeParts([
 		makeMesh(new CylinderGeometry(0.4, 0.55, 4, 6), 8014634, {
 			pos: [0, 2, 0],
 		}),
@@ -198,8 +210,8 @@ function Rm() {
 		}),
 	]);
 }
-function zm() {
-	return Nd([
+function createHouseGeometry() {
+	return mergeParts([
 		makeMesh(new BoxGeometry(9, 5, 7), 16773327, {
 			pos: [0, 2.5, 0],
 		}),
@@ -223,8 +235,8 @@ function zm() {
 		}),
 	]);
 }
-function Bm() {
-	return Nd([
+function createBarnGeometry() {
+	return mergeParts([
 		makeMesh(new BoxGeometry(13, 7, 9), 12992046, {
 			pos: [0, 3.5, 0],
 		}),
@@ -239,8 +251,8 @@ function Bm() {
 		}),
 	]);
 }
-function Vm() {
-	return Nd([
+function createWindmillGeometry() {
+	return mergeParts([
 		makeMesh(new CylinderGeometry(2.2, 3.6, 14, 8), 16773327, {
 			pos: [0, 7, 0],
 			flat: true,
@@ -259,33 +271,33 @@ function Vm() {
 		}),
 	]);
 }
-var Hm = {
+var PROP_INSTANCE_LIMITS = {
 	0: 30000,
 	1: 30000,
 	2: 3000,
 	3: 2000,
 	4: 600,
 };
-var Um = class {
+var PropInstances = class {
 	group = new Group();
 	meshes = new Map();
 	version = -1;
 	constructor(e, t) {
 		this.group.name = `props`;
 		let n = [
-			[0, Lm()],
-			[1, Rm()],
-			[2, zm()],
-			[3, Bm()],
-			[4, Vm()],
+			[0, createConiferGeometry()],
+			[1, createDeciduousTreeGeometry()],
+			[2, createHouseGeometry()],
+			[3, createBarnGeometry()],
+			[4, createWindmillGeometry()],
 		];
 		for (let [r, i] of n) {
-			let n = new InstancedMesh(i, e, Hm[r]);
+			let n = new InstancedMesh(i, e, PROP_INSTANCE_LIMITS[r]);
 			n.count = 0;
 			n.castShadow = true;
 			n.receiveShadow = true;
 			n.frustumCulled = false;
-			let a = new InstancedMesh(i, t, Hm[r]);
+			let a = new InstancedMesh(i, t, PROP_INSTANCE_LIMITS[r]);
 			a.instanceMatrix = n.instanceMatrix;
 			a.count = 0;
 			a.frustumCulled = false;
@@ -318,7 +330,7 @@ var Um = class {
 					continue;
 				}
 				let f = t.get(u);
-				if (!(f >= Hm[u])) {
+				if (!(f >= PROP_INSTANCE_LIMITS[u])) {
 					i.set(e * 512 + c[l], c[l + 1], s * 512 + c[l + 2]);
 					r.setFromAxisAngle(o, c[l + 4]);
 					a.setScalar(c[l + 3]);
@@ -350,5 +362,17 @@ var Um = class {
 		}
 	}
 };
-
-export { Bm, Fm, Hm, Lm, Mm, Nm, Pm, Rm, Um, Vm, Weather, zm };
+export {
+	createBarnGeometry,
+	MAX_CLOUD_SPHERES,
+	PROP_INSTANCE_LIMITS,
+	createConiferGeometry,
+	CLOUD_BASE_CLEARANCE,
+	CLOUD_ALTITUDE_VARIATION,
+	CLOUD_CELL_SIZE,
+	createDeciduousTreeGeometry,
+	PropInstances,
+	createWindmillGeometry,
+	Weather,
+	createHouseGeometry,
+};

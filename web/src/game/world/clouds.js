@@ -1,8 +1,8 @@
-import { Um, Weather } from "./destinations.js";
-import { Rd, Vd } from "../plane/meshkit.js";
-import { am, im } from "./noise.js";
-import { TerrainManager, km } from "./props.js";
-import { np } from "./sky.js";
+import { PropInstances, Weather } from "./destinations.js";
+import { createOutlineMaterial, createToonMaterial } from "../plane/meshkit.js";
+import { createSeededRandom, hashSeedIntegers } from "./noise.js";
+import { TerrainManager, AirfieldScene } from "./props.js";
+import { SKY_TIME_PRESETS } from "./sky.js";
 import { Terrain } from "./terrain.js";
 import {
 	Group,
@@ -11,8 +11,7 @@ import {
 	Quaternion,
 	Vector3,
 } from "../core/three.js";
-
-var Wm = class {
+var World = class {
 	seed;
 	gen;
 	group = new Group();
@@ -34,32 +33,32 @@ var Wm = class {
 	constructor(e, t) {
 		this.seed = e;
 		this.gen = new Terrain(e);
-		let n = am(im(e, 2024));
-		this.time = np[Math.floor(n() * np.length)];
+		let n = createSeededRandom(hashSeedIntegers(e, 2024));
+		this.time = SKY_TIME_PRESETS[Math.floor(n() * SKY_TIME_PRESETS.length)];
 		let r = n();
 		this.cover = r < 0.2 ? `clear` : r < 0.8 ? `fair` : `overcast`;
 		let i = n() * Math.PI * 2;
 		let a = 1.5 + n() * 3.5;
 		this.baseWind.set(Math.cos(i) * a, 0, Math.sin(i) * a);
 		this.wind.copy(this.baseWind);
-		this.terrainMat = Vd({
+		this.terrainMat = createToonMaterial({
 			vertexColors: true,
 			rim: 0,
 			ramp: [128, 198, 255],
 		});
-		this.propMat = Vd({
+		this.propMat = createToonMaterial({
 			vertexColors: true,
 			rim: 0.2,
 		});
-		this.propOutline = Rd(this.time.ink, 1, 300);
-		this.stripMat = Vd({
+		this.propOutline = createOutlineMaterial(this.time.ink, 1, 300);
+		this.stripMat = createToonMaterial({
 			vertexColors: true,
 			rim: 0,
 		});
 		this.stripMat.polygonOffset = true;
 		this.stripMat.polygonOffsetFactor = -2;
 		this.stripMat.polygonOffsetUnits = -4;
-		this.markMat = Vd({
+		this.markMat = createToonMaterial({
 			vertexColors: true,
 			rim: 0,
 		});
@@ -67,11 +66,11 @@ var Wm = class {
 		this.markMat.polygonOffsetFactor = -4;
 		this.markMat.polygonOffsetUnits = -16;
 		this.chunks = new TerrainManager(e, this.terrainMat, t);
-		this.props = new Um(this.propMat, this.propOutline);
+		this.props = new PropInstances(this.propMat, this.propOutline);
 		this.clouds = new Weather(e, this.cover, (e, t) => this.gen.height(e, t));
 		this.group.add(this.chunks.group, this.props.group, this.clouds.group);
 		for (let e of this.gen.airfields) {
-			let t = new km(
+			let t = new AirfieldScene(
 				e,
 				this.propMat,
 				this.propOutline,
@@ -162,11 +161,11 @@ var Wm = class {
 		this.markMat.dispose();
 	}
 };
-var Gm = new Vector3();
-var Km = new Vector3();
-var qm = new Vector3();
-var Jm = new Vector3();
-var Ym = new Matrix4();
+var cameraOffsetScratch = new Vector3();
+var cameraLookTargetScratch = new Vector3();
+var cameraUpScratch = new Vector3();
+var cameraForwardScratch = new Vector3();
+var cameraLookMatrixScratch = new Matrix4();
 var CameraRig = class {
 	camera;
 	mode = `chase`;
@@ -197,19 +196,23 @@ var CameraRig = class {
 		this.initialized ||= (this.q.copy(n), true);
 		this.q.slerp(n, 1 - Math.exp(-e * 5));
 		if (this.mode === `cockpit`) {
-			Gm.copy(this.cockpit).applyQuaternion(n);
-			a.position.copy(t).add(Gm);
+			cameraOffsetScratch.copy(this.cockpit).applyQuaternion(n);
+			a.position.copy(t).add(cameraOffsetScratch);
 			a.quaternion.copy(n);
 		} else {
-			Gm.set(0, this.chaseScale * 3.4, this.chaseScale * 13.5).applyQuaternion(
-				this.q,
+			cameraOffsetScratch
+				.set(0, this.chaseScale * 3.4, this.chaseScale * 13.5)
+				.applyQuaternion(this.q);
+			a.position.copy(t).add(cameraOffsetScratch);
+			cameraForwardScratch.set(0, 0, -1).applyQuaternion(this.q);
+			cameraLookTargetScratch.copy(t).addScaledVector(cameraForwardScratch, 25);
+			cameraUpScratch.set(0, 1, 0).applyQuaternion(this.q);
+			cameraLookMatrixScratch.lookAt(
+				a.position,
+				cameraLookTargetScratch,
+				cameraUpScratch,
 			);
-			a.position.copy(t).add(Gm);
-			Jm.set(0, 0, -1).applyQuaternion(this.q);
-			Km.copy(t).addScaledVector(Jm, 25);
-			qm.set(0, 1, 0).applyQuaternion(this.q);
-			Ym.lookAt(a.position, Km, qm);
-			a.quaternion.setFromRotationMatrix(Ym);
+			a.quaternion.setFromRotationMatrix(cameraLookMatrixScratch);
 		}
 		let o = Math.max(i(a.position.x, a.position.z), 0) + 1.2;
 		if (a.position.y < o) {
@@ -245,5 +248,12 @@ var CameraRig = class {
 		this.shake = Math.max(0, this.shake - e * 2.2);
 	}
 };
-
-export { CameraRig, Gm, Jm, Km, Wm, Ym, qm };
+export {
+	CameraRig,
+	cameraOffsetScratch,
+	cameraForwardScratch,
+	cameraLookTargetScratch,
+	World,
+	cameraLookMatrixScratch,
+	cameraUpScratch,
+};

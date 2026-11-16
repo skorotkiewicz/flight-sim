@@ -1,21 +1,57 @@
 import { SoundEngine } from "./app/audio.js";
 import { Assist } from "./flight/clock.js";
-import { CameraRig, Wm } from "./world/clouds.js";
-import { Vf, Yf } from "./plane/contrails.js";
+import { CameraRig, World } from "./world/clouds.js";
+import { getFlightBankAngle, FlightPathGuide } from "./plane/contrails.js";
 import { DesktopInput, PwaManager } from "./flight/controls.js";
-import { Bu, FLAP_LABELS, Hu, Uu, Wu, hu, mu } from "./flight/flight.js";
+import {
+	getFlapStallAngle,
+	FLAP_LABELS,
+	stepFlight,
+	getGroundRestQuaternion,
+	getGroundRestHeight,
+	DEFAULT_FLIGHT_SPEC,
+	CRASH_SPEED_TOLERANCE,
+} from "./flight/flight.js";
 import { Hangar } from "./ui/hangarui.js";
 import { Hud } from "./ui/hud.js";
-import { TouchInput, cu, isHandheld, lu } from "./flight/input.js";
+import {
+	TouchInput,
+	readSafeAreaInsets,
+	isHandheld,
+	requestLandscapeFullscreen,
+} from "./flight/input.js";
 import { loadModule } from "./app/loader.js";
 import { SettingsPanel } from "./ui/menus.js";
-import { Rd, Vd } from "./plane/meshkit.js";
-import { Ch, bh, dh, fh, lh, mh, ph, wh } from "./world/mission.js";
-import { Zd } from "./plane/particles.js";
-import { Cf, PLANE_MODELS, Rf, df, mf, uf, xf } from "./plane/planemodels.js";
-import { tp } from "./core/postfx.js";
-import { Water, ip, rp } from "./world/sky.js";
-import { Cd, randomSeed, vd, xd, yd } from "./app/storage.js";
+import { createOutlineMaterial, createToonMaterial } from "./plane/meshkit.js";
+import {
+	sampleRoutePosition,
+	planFlightRoute,
+	bearingBetweenPoints,
+	nameAirfields,
+	chooseUpwindRunwayDirection,
+	PLANE_ROUTE_CRUISE_SPEEDS,
+	PLANE_ROUTE_TURN_RADII,
+	RouteTracker,
+} from "./world/mission.js";
+import { FlightEffects } from "./plane/particles.js";
+import {
+	formatPlaneLoadout,
+	PLANE_MODELS,
+	Aircraft,
+	getPlaneEngineKind,
+	estimateStallSpeed,
+	buildFlightSpec,
+	loadPlaneLoadout,
+} from "./plane/planemodels.js";
+import { PostProcessingComposer } from "./core/postfx.js";
+import { Water, Sky, sunDirectionForTime } from "./world/sky.js";
+import {
+	saveBestScore,
+	randomSeed,
+	loadSettings,
+	getScoreStorageKey,
+	saveSettings,
+} from "./app/storage.js";
 import {
 	DirectionalLight,
 	Fog,
@@ -27,9 +63,8 @@ import {
 	Vector3,
 	WebGLRenderer,
 } from "./core/three.js";
-import { rm } from "./ui/worldmap.js";
-
-var jh = {
+import { drawRouteMap } from "./ui/worldmap.js";
+var RENDER_QUALITY_PRESETS = {
 	mobile: {
 		radius: 3,
 		post: false,
@@ -59,9 +94,9 @@ var jh = {
 		maxPR: 2,
 	},
 };
-var Mh = new Vector3();
-var Nh = new Vector3();
-var Ph = new Vector3();
+var gamePositionScratch = new Vector3();
+var hangarCameraPositionScratch = new Vector3();
+var hangarCameraTargetScratch = new Vector3();
 var Game = class {
 	renderer;
 	scene = new Scene();
@@ -70,12 +105,12 @@ var Game = class {
 	input;
 	loop;
 	rig;
-	post = new tp();
-	sky = new ip();
+	post = new PostProcessingComposer();
+	sky = new Sky();
 	water = new Water();
 	sun = new DirectionalLight(16777215, 2.8);
 	hemi = new HemisphereLight(16777215, 5596740, 1.2);
-	fx = new Zd();
+	fx = new FlightEffects();
 	audio = new SoundEngine();
 	hud;
 	ui;
@@ -83,15 +118,15 @@ var Game = class {
 	env = null;
 	planes = [];
 	player = null;
-	planeToon = Vd({
+	planeToon = createToonMaterial({
 		vertexColors: true,
 		rim: 0.3,
 	});
-	planeOutline = Rd(2825498, 1.1, 400);
+	planeOutline = createOutlineMaterial(2825498, 1.1, 400);
 	spec = {
-		...hu,
+		...DEFAULT_FLIGHT_SPEC,
 	};
-	loadout = xf();
+	loadout = loadPlaneLoadout();
 	hangar;
 	preview = null;
 	previewYaw = 2.2;
@@ -107,7 +142,7 @@ var Game = class {
 	loadT = 0;
 	whiteout = 0;
 	tierName = `medium`;
-	tier = jh.medium;
+	tier = RENDER_QUALITY_PRESETS.medium;
 	renderScale = 1;
 	frameAvg = 16;
 	resTimer = 0;
@@ -123,7 +158,7 @@ var Game = class {
 	wakeLock = new TouchInput();
 	pwa = new PwaManager();
 	constructor(e, t) {
-		this.settings = vd();
+		this.settings = loadSettings();
 		this.renderer = new WebGLRenderer({
 			canvas: e,
 			antialias: true,
@@ -149,7 +184,7 @@ var Game = class {
 			again: () => this.startSortie(),
 			newWorld: () => {
 				this.settings.seed = randomSeed();
-				yd(this.settings);
+				saveSettings(this.settings);
 				this.ui.setSeed(this.settings.seed);
 				this.newWorld(this.settings.seed);
 				this.startSortie();
@@ -281,7 +316,7 @@ var Game = class {
 		this.applyTier();
 		this.newWorld(this.settings.seed);
 		this.resize();
-		this.ui.setAircraft(Cf(this.loadout));
+		this.ui.setAircraft(formatPlaneLoadout(this.loadout));
 		this.ui.show(`title`);
 		this.loop = new Assist(
 			(e) => this.step(e),
@@ -311,7 +346,7 @@ var Game = class {
 		let e = this.pickTier();
 		let t = this.renderer.shadowMap.enabled;
 		this.tierName = e;
-		this.tier = jh[e];
+		this.tier = RENDER_QUALITY_PRESETS[e];
 		this.renderScale = 1;
 		this.renderer.shadowMap.enabled = this.tier.shadows;
 		this.sun.castShadow = this.tier.shadows;
@@ -357,7 +392,7 @@ var Game = class {
 		this.camera.updateProjectionMatrix();
 		this.post.setSize(e * n, t * n);
 		this.hud.resize();
-		this.input.touch.model.resize(e, t, cu());
+		this.input.touch.model.resize(e, t, readSafeAreaInsets());
 	}
 	newWorld(e) {
 		if (this.world) {
@@ -365,7 +400,7 @@ var Game = class {
 			this.world.dispose();
 		}
 		this.clearPlanes();
-		let t = new Wm(e, this.tier.radius);
+		let t = new World(e, this.tier.radius);
 		this.world = t;
 		this.env = {
 			groundHeight: (e, n) => t.groundHeight(e, n),
@@ -400,7 +435,7 @@ var Game = class {
 		}
 		let t = this.settings;
 		let n = e.gen.airfields;
-		this.names = fh(n);
+		this.names = nameAirfields(n);
 		if (t.dest < 1 || t.dest >= n.length) {
 			t.dest = 1;
 		}
@@ -411,13 +446,22 @@ var Game = class {
 			return;
 		}
 		let r = n[t.dest];
-		let i = bh(e.gen, e.home, r, e.baseWind, ph[this.loadout.style]);
+		let i = planFlightRoute(
+			e.gen,
+			e.home,
+			r,
+			e.baseWind,
+			PLANE_ROUTE_TURN_RADII[this.loadout.style],
+		);
 		this.route = i;
 		this.drawMap();
 		let a = (i.sAim / 1000).toFixed(1);
-		let o = Math.max(1, Math.round(i.sAim / mh[this.loadout.style] / 60));
+		let o = Math.max(
+			1,
+			Math.round(i.sAim / PLANE_ROUTE_CRUISE_SPEEDS[this.loadout.style] / 60),
+		);
 		let s = [`N`, `NE`, `E`, `SE`, `S`, `SW`, `W`, `NW`][
-			Math.round(dh(e.home.x, e.home.z, r.x, r.z) / 45) % 8
+			Math.round(bearingBetweenPoints(e.home.x, e.home.z, r.x, r.z) / 45) % 8
 		];
 		let c =
 			i.land.dx * e.baseWind.x + i.land.dz * e.baseWind.z > 0
@@ -436,7 +480,7 @@ var Game = class {
 		let t = Math.min(window.devicePixelRatio || 1, 2);
 		e.width = Math.round(e.clientWidth * t);
 		e.height = Math.round(e.clientHeight * t);
-		rm(e, this.world.gen, this.route, this.names);
+		drawRouteMap(e, this.world.gen, this.route, this.names);
 	}
 	stepDest(e) {
 		let t = this.world;
@@ -445,7 +489,7 @@ var Game = class {
 		}
 		let n = t.gen.airfields.length - 1;
 		this.settings.dest = ((this.settings.dest - 1 + e + n) % n) + 1;
-		yd(this.settings);
+		saveSettings(this.settings);
 		this.refreshRoute();
 	}
 	clearGuide() {
@@ -474,7 +518,7 @@ var Game = class {
 			this.state = `title`;
 			this.camera.fov = 70;
 			this.camera.updateProjectionMatrix();
-			this.ui.setAircraft(Cf(this.loadout));
+			this.ui.setAircraft(formatPlaneLoadout(this.loadout));
 			this.refreshRoute();
 			this.ui.show(`title`);
 		}
@@ -486,9 +530,13 @@ var Game = class {
 	buildPreview() {
 		this.clearPreview();
 		if (this.world && this.state === `hangar`) {
-			this.preview = new Rf(this.loadout, this.planeToon, this.planeOutline);
+			this.preview = new Aircraft(
+				this.loadout,
+				this.planeToon,
+				this.planeOutline,
+			);
 			this.scene.add(this.preview.visual.root);
-			this.audio.setEngine(df(this.loadout.style));
+			this.audio.setEngine(getPlaneEngineKind(this.loadout.style));
 		}
 	}
 	clearPreview() {
@@ -502,7 +550,7 @@ var Game = class {
 		let n = this.preview;
 		let r = t.fields[0];
 		r.group.updateMatrixWorld();
-		let i = r.group.localToWorld(Mh.copy(r.previewSpot));
+		let i = r.group.localToWorld(gamePositionScratch.copy(r.previewSpot));
 		let a =
 			this.loadout.style === `jet`
 				? 1.3
@@ -513,9 +561,13 @@ var Game = class {
 			if (this.previewDrag === null) {
 				this.previewYaw += e * 0.35;
 			}
-			let t = Uu(Math.cos(this.previewYaw), Math.sin(this.previewYaw), n.gear);
+			let t = getGroundRestQuaternion(
+				Math.cos(this.previewYaw),
+				Math.sin(this.previewYaw),
+				n.gear,
+			);
 			n.s.quat.copy(t);
-			n.s.pos.set(i.x, i.y + Wu(t, n.gear), i.z);
+			n.s.pos.set(i.x, i.y + getGroundRestHeight(t, n.gear), i.z);
 			n.teleport();
 			n.input.pitch = n.input.roll = n.input.yaw = 0;
 			n.s.rpm = 0.18;
@@ -524,8 +576,8 @@ var Game = class {
 		let o = t.home;
 		let s = -o.dirZ;
 		let c = o.dirX;
-		let l = Nh.set(i.x, i.y + a * 1.4, i.z);
-		let u = Ph.set(
+		let l = hangarCameraPositionScratch.set(i.x, i.y + a * 1.4, i.z);
+		let u = hangarCameraTargetScratch.set(
 			i.x + o.dirX * 8 * a - s * 11 * a,
 			i.y + a * 3.4,
 			i.z + o.dirZ * 8 * a - c * 11 * a,
@@ -562,7 +614,7 @@ var Game = class {
 	fly() {
 		this.uiClick();
 		if (this.input.lastInput === `touch`) {
-			lu();
+			requestLandscapeFullscreen();
 			if (this.settings.tilt && !this.input.touch.tiltEnabled) {
 				this.input.touch.setTilt(true).then((e) => {
 					if (!e) {
@@ -594,7 +646,7 @@ var Game = class {
 		this.ui.clearHint();
 		this.ui.setWhiteout(0);
 		this.ui.refreshBest();
-		this.ui.setAircraft(Cf(this.loadout));
+		this.ui.setAircraft(formatPlaneLoadout(this.loadout));
 		this.ui.show(`title`);
 		this.camera.fov = 70;
 		this.camera.updateProjectionMatrix();
@@ -624,8 +676,8 @@ var Game = class {
 		this.clearPreview();
 		this.input.invertPitch = this.settings.invertPitch;
 		this.rig.shakeEnabled = this.settings.cameraShake;
-		Object.assign(this.spec, uf(this.loadout));
-		let t = new Rf(
+		Object.assign(this.spec, buildFlightSpec(this.loadout));
+		let t = new Aircraft(
 			{
 				...this.loadout,
 			},
@@ -633,7 +685,7 @@ var Game = class {
 			this.planeOutline,
 			this.spec,
 		);
-		this.audio.setEngine(df(this.loadout.style));
+		this.audio.setEngine(getPlaneEngineKind(this.loadout.style));
 		this.rig.chaseScale =
 			this.loadout.style === `jet`
 				? 1.25
@@ -652,18 +704,22 @@ var Game = class {
 			}
 			let e = this.route;
 			this.sortieRoute = e;
-			this.guide = new Yf(e);
+			this.guide = new FlightPathGuide(e);
 			this.scene.add(this.guide.mesh);
-			this.tracker = new wh(e);
+			this.tracker = new RouteTracker(e);
 		}
 		let { dx: i, dz: a } = this.sortieRoute
 			? this.sortieRoute.depart
-			: lh(r, e.wind);
+			: chooseUpwindRunwayDirection(r, e.wind);
 		let o = r.paved / 2 - 20;
 		let s = r.x - i * o;
 		let c = r.z - a * o;
-		t.s.quat.copy(Uu(i, a, t.gear));
-		t.s.pos.set(s, e.groundHeight(s, c) + Wu(t.s.quat, t.gear), c);
+		t.s.quat.copy(getGroundRestQuaternion(i, a, t.gear));
+		t.s.pos.set(
+			s,
+			e.groundHeight(s, c) + getGroundRestHeight(t.s.quat, t.gear),
+			c,
+		);
 		t.s.rpm = 0.15;
 		t.teleport();
 		this.input.resetThrottle(0);
@@ -776,7 +832,7 @@ var Game = class {
 		let i = e.touch;
 		let a = 0;
 		if (i) {
-			let n = (t.spec.crashSpeed / 6) * mu;
+			let n = (t.spec.crashSpeed / 6) * CRASH_SPEED_TOLERANCE;
 			a += i.sink < n * 1.5 ? 2 : +(i.sink < n * 3);
 			a += +(i.bank < 0.1035);
 			a += +!!i.onRunway;
@@ -856,12 +912,12 @@ var Game = class {
 		}
 		u.push([`Landing grade`, n ? e.grade : `—`]);
 		u.push([`Flight time`, l]);
-		u.push([`Aircraft`, Cf(t.loadout)]);
+		u.push([`Aircraft`, formatPlaneLoadout(t.loadout)]);
 		u.push([`World seed`, String(this.settings.seed)]);
-		let d = Cd(
+		let d = saveBestScore(
 			o
-				? xd(this.settings.seed, `route`, this.settings.dest)
-				: xd(this.settings.seed),
+				? getScoreStorageKey(this.settings.seed, `route`, this.settings.dest)
+				: getScoreStorageKey(this.settings.seed),
 			{
 				medal: a,
 				landing: n ? e.grade : `—`,
@@ -910,12 +966,12 @@ var Game = class {
 			t !== `expert` && t === `arcade`)
 		) {
 			if (Math.abs(n.roll) < 0.05 && !this.input.mouseStick) {
-				let e = Vf(r);
+				let e = getFlightBankAngle(r);
 				if (Math.abs(e) < 1.4) {
 					n.roll = MathUtils.clamp(e * 0.9 + r.angVel.z * 0.25, -0.6, 0.6);
 				}
 			}
-			if (r.alpha > Bu(e.spec, r.flaps) * 0.85 && n.pitch > 0) {
+			if (r.alpha > getFlapStallAngle(e.spec, r.flaps) * 0.85 && n.pitch > 0) {
 				n.pitch *= 0.35;
 			}
 		}
@@ -935,20 +991,24 @@ var Game = class {
 			e.smokeT = 1 / 30;
 			let t = n.health;
 			if (e.downed || t.engine < 0.6 || t.wings < 0.5) {
-				Mh.set(0, 0.4, -1.6).applyQuaternion(n.quat).add(n.pos);
-				this.fx.smoke(Mh, n.vel, e.downed ? 1 : 1 - t.engine);
+				gamePositionScratch
+					.set(0, 0.4, -1.6)
+					.applyQuaternion(n.quat)
+					.add(n.pos);
+				this.fx.smoke(gamePositionScratch, n.vel, e.downed ? 1 : 1 - t.engine);
 				if (e.downed || t.engine < 0.25) {
-					this.fx.fire(Mh, n.vel);
+					this.fx.fire(gamePositionScratch, n.vel);
 				}
 			}
 		}
 		e.dustT -= t;
 		if (n.onGround && e.dustT <= 0 && n.vel.length() > 6) {
 			e.dustT = 1 / 8;
-			Mh.set(Math.random() < 0.5 ? -0.9 : 0.9, -1.3, -0.4)
+			gamePositionScratch
+				.set(Math.random() < 0.5 ? -0.9 : 0.9, -1.3, -0.4)
 				.applyQuaternion(n.quat)
 				.add(n.pos);
-			this.fx.dust(Mh);
+			this.fx.dust(gamePositionScratch);
 		}
 	}
 	step(e) {
@@ -982,7 +1042,7 @@ var Game = class {
 			if (i.wrecked) {
 				continue;
 			}
-			let a = Hu(i.s, i.spec, i.input, this.env, e, i.gear);
+			let a = stepFlight(i.s, i.spec, i.input, this.env, e, i.gear);
 			if (a.crashed) {
 				this.crashPlane(i, a.crashed, a.splash);
 			} else {
@@ -990,7 +1050,10 @@ var Game = class {
 					i.s.health.engine = Math.max(0, i.s.health.engine - e * 1.5);
 					if (this.tick % 6 == 0) {
 						this.fx.sparksAt(
-							Mh.set(0, -1.1, -2.9).applyQuaternion(i.s.quat).add(i.s.pos),
+							gamePositionScratch
+								.set(0, -1.1, -2.9)
+								.applyQuaternion(i.s.quat)
+								.add(i.s.pos),
 							2,
 						);
 					}
@@ -1025,7 +1088,7 @@ var Game = class {
 			let i = n.s.pos.y - Math.max(t.groundHeight(n.s.pos.x, n.s.pos.z), 0);
 			if (r.hintStage === 0 && n.s.onGround && n.s.airspeed > 14) {
 				r.hintStage = 1;
-				let e = Math.round((mf(n.spec) * 1.25 * 3.6) / 5) * 5;
+				let e = Math.round((estimateStallSpeed(n.spec) * 1.25 * 3.6) / 5) * 5;
 				this.ui.hint(
 					n.gear.tricycle
 						? this.say(
@@ -1253,7 +1316,13 @@ var Game = class {
 			case `title`:
 			case `debrief`: {
 				let t = n.home;
-				this.rig.orbit(e, Mh.set(t.x, t.height + 20, t.z), 650, 110, 0.04);
+				this.rig.orbit(
+					e,
+					gamePositionScratch.set(t.x, t.height + 20, t.z),
+					650,
+					110,
+					0.04,
+				);
 				n.update(this.camera.position, null, e);
 				break;
 			}
@@ -1321,7 +1390,7 @@ var Game = class {
 			this.state !== `debrief`
 				? i.s.pos
 				: this.camera.position;
-		let o = rp(n.time);
+		let o = sunDirectionForTime(n.time);
 		let s = (260 / this.tier.shadowSize) * 2;
 		this.sun.target.position.set(
 			Math.round(a.x / s) * s,
@@ -1461,7 +1530,7 @@ var Game = class {
 		}
 		let n =
 			this.state === `sortie` && this.mission.tookOff && !t.onPath()
-				? (Ch(e, t.progress + 500, this.rejoin), this.rejoin)
+				? (sampleRoutePosition(e, t.progress + 500, this.rejoin), this.rejoin)
 				: null;
 		return {
 			route: e,
@@ -1491,20 +1560,28 @@ var Game = class {
 		window.baron = this;
 	}
 };
-function Ih() {
+function supportsWebGL2() {
 	try {
 		return !!document.createElement(`canvas`).getContext(`webgl2`);
 	} catch {
 		return false;
 	}
 }
-var Lh = document.getElementById(`game`);
-var Rh = document.getElementById(`hud`);
-if (Ih()) {
-	new Game(Lh, Rh).start();
+var gameCanvas = document.getElementById(`game`);
+var hudCanvas = document.getElementById(`hud`);
+if (supportsWebGL2()) {
+	new Game(gameCanvas, hudCanvas).start();
 } else {
 	document.getElementById(`title`)?.classList.add(`hidden`);
 	document.getElementById(`nogl`)?.classList.remove(`hidden`);
 }
-
-export { Game, Ih, Lh, Mh, Nh, Ph, Rh, jh };
+export {
+	Game,
+	supportsWebGL2,
+	gameCanvas,
+	gamePositionScratch,
+	hangarCameraPositionScratch,
+	hangarCameraTargetScratch,
+	hudCanvas,
+	RENDER_QUALITY_PRESETS,
+};

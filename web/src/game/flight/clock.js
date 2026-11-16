@@ -1,6 +1,6 @@
-var cd = 1 / 120;
-var ld = 0.1;
-var ud = 12;
+var FIXED_STEP_SECONDS = 1 / 120;
+var MAX_FRAME_SECONDS = 0.1;
+var MAX_STEPS_PER_FRAME = 12;
 var Assist = class {
 	onStep;
 	onFrame;
@@ -29,23 +29,23 @@ var Assist = class {
 			}
 			let n = (t - this.last) / 1000;
 			this.last = t;
-			if (n > ld) {
-				n = ld;
+			if (n > MAX_FRAME_SECONDS) {
+				n = MAX_FRAME_SECONDS;
 			}
 			if (n < 0) {
 				n = 0;
 			}
 			this.acc += n;
 			let r = 0;
-			while (this.acc >= 0.008333333333333333 && r < ud) {
-				this.onStep(cd);
-				this.acc -= cd;
+			while (this.acc >= 0.008333333333333333 && r < MAX_STEPS_PER_FRAME) {
+				this.onStep(FIXED_STEP_SECONDS);
+				this.acc -= FIXED_STEP_SECONDS;
 				r++;
 			}
-			if (r === ud) {
+			if (r === MAX_STEPS_PER_FRAME) {
 				this.acc = 0;
 			}
-			this.onFrame(n, this.acc / cd);
+			this.onFrame(n, this.acc / FIXED_STEP_SECONDS);
 		};
 		this.raf = requestAnimationFrame(e);
 	}
@@ -54,6 +54,11 @@ var Assist = class {
 		cancelAnimationFrame(this.raf);
 	}
 };
-var fd = `baron.settings.v1`;
-
-export { Assist, cd, fd, ld, ud };
+var SETTINGS_STORAGE_KEY = `baron.settings.v1`;
+export {
+	Assist,
+	FIXED_STEP_SECONDS,
+	SETTINGS_STORAGE_KEY,
+	MAX_FRAME_SECONDS,
+	MAX_STEPS_PER_FRAME,
+};
