@@ -19,7 +19,7 @@ import {
 	Vector3,
 	WebGLRenderer,
 } from "./core/three.js";
-import { AtcController } from "./flight/atc.js";
+const { AtcController } = await import("./flight/atc.js");
 import { Assist } from "./flight/clock.js";
 import { DesktopInput, PwaManager } from "./flight/controls.js";
 import {

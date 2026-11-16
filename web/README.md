@@ -35,18 +35,18 @@ If the game runs slowly, select **Low** graphics.
 
 ## Controls
 
-| Action | Keyboard |
-| --- | --- |
-| Nose down / up | W / S or ↑ / ↓ |
-| Roll left / right | A / D or ← / → |
-| Rudder / ground steering | Q / E |
-| Increase / decrease throttle | Shift / Ctrl |
-| Extend / retract flaps | F / V |
-| Hold brakes | B |
-| Change camera | C |
-| Open / close ATC radio | T |
-| Pause | Esc or P |
-| Restart flight | R |
+| Action                       | Keyboard       |
+| ---------------------------- | -------------- |
+| Nose down / up               | W / S or ↑ / ↓ |
+| Roll left / right            | A / D or ← / → |
+| Rudder / ground steering     | Q / E          |
+| Increase / decrease throttle | Shift / Ctrl   |
+| Extend / retract flaps       | F / V          |
+| Hold brakes                  | B              |
+| Change camera                | C              |
+| Open / close ATC radio       | T              |
+| Pause                        | Esc or P       |
+| Restart flight               | R              |
 
 On touch screens, drag on the left half to steer and use the throttle lever on
 the right. Drag down to climb. Flaps, brakes, camera, and radio have on-screen
