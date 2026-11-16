@@ -19,7 +19,9 @@ import {
 	Vector3,
 	WebGLRenderer,
 } from "./core/three.js";
+
 const { AtcController } = await import("./flight/atc.js");
+
 import { Assist } from "./flight/clock.js";
 import { DesktopInput, PwaManager } from "./flight/controls.js";
 import {
@@ -37,6 +39,7 @@ import {
 	requestLandscapeFullscreen,
 	TouchInput,
 } from "./flight/input.js";
+import { isGearDownLocked, toggleLandingGear } from "./flight/landing-gear.js";
 import { FlightPathGuide, getFlightBankAngle } from "./plane/contrails.js";
 import { createOutlineMaterial, createToonMaterial } from "./plane/meshkit.js";
 import { FlightEffects } from "./plane/particles.js";
@@ -582,6 +585,8 @@ var Game = class {
 				0,
 			),
 			alive: this.player.alive,
+			gearRetractable: this.player.spec.retractableGear === true,
+			gearDownLocked: isGearDownLocked(state, this.player.spec),
 		};
 	}
 	renderAtc() {
@@ -996,6 +1001,7 @@ var Game = class {
 		if (!r) {
 			a = Math.min(a, 2);
 		}
+		if (i?.gearUp) a = Math.min(a, 1);
 		e.grade =
 			a >= 5 ? `A+` : a === 4 ? `A` : a === 3 ? `B` : a === 2 ? `C` : `D`;
 		let o = {
@@ -1018,6 +1024,7 @@ var Game = class {
 					? `Landed at ${t}, not ${this.destName()}`
 					: `Landed in a field`;
 		}
+		if (i?.gearUp) e.resultText = `Gear-up landing. ${e.resultText}`;
 		this.ui.toast(`${o[e.grade]}  ${e.grade}`);
 		this.audio.fanfare(true);
 		this.endSortie(2.5, null);
@@ -1332,6 +1339,23 @@ var Game = class {
 			}
 		}
 	}
+	toggleGear() {
+		const plane = this.player;
+		if (this.state !== `sortie` || this.paused || !plane?.alive) return;
+		const result = toggleLandingGear(
+			plane.s,
+			plane.spec,
+			Math.max(this.world.groundHeight(plane.s.pos.x, plane.s.pos.z), 0),
+		);
+		const message = {
+			fixed: `This aircraft has fixed landing gear.`,
+			"ground-locked": `GEAR LOCKED: lift clear of the ground before retracting.`,
+			extending: `GEAR EXTENDING`,
+			retracting: `GEAR RETRACTING`,
+		}[result];
+		this.ui.toast(message, 1800);
+		if (result === `extending` || result === `retracting`) this.audio.click();
+	}
 	handleKeys() {
 		let e = this.input;
 		let t = e.touch.model.take();
@@ -1355,6 +1379,7 @@ var Game = class {
 				}
 			}
 			if (this.state === `sortie`) {
+				if (e.wasPressed(`KeyG`) || t.has(`gear`)) this.toggleGear();
 				if (this.atc && e.wasPressed(`KeyT`)) this.radio.toggle();
 				let n =
 					(e.wasPressed(`KeyF`) || e.padWasPressed(13) || t.has(`flapsMore`)
@@ -1666,6 +1691,8 @@ var Game = class {
 			!r.downed &&
 			!r.s.onGround &&
 			!!this.mission?.tookOff;
+		t.model.gearShown =
+			this.state === `sortie` && r?.spec.retractableGear === true;
 		t.update(e);
 		this.loop.maxFps =
 			this.tierName === `mobile` ? (n && !this.paused ? 60 : 30) : 0;
@@ -1683,6 +1710,7 @@ var Game = class {
 			throttle: t.throttle,
 			held: (e) => t.held(e),
 			bailShown: t.bailShown,
+			gearShown: t.gearShown,
 			bailProgress: t.bailProgress(n),
 			tilt: e.tiltEnabled,
 		};

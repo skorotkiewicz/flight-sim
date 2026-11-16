@@ -1,4 +1,10 @@
 import { MathUtils, Matrix4, Quaternion, Vector3 } from "../core/three.js";
+import {
+	getGearParasiteDrag,
+	isGearDownLocked,
+	updateLandingGear,
+} from "./landing-gear.js";
+
 var FLAP_POSITIONS = [0, 0.5, 1];
 var FLAP_LABELS = [`UP`, `T/O`, `LAND`];
 var FLAP_DEFLECTION_RADIANS = 0.61;
@@ -79,6 +85,8 @@ var FlightState = class {
 	lastSink = 0;
 	flaps = 0;
 	flapsBlown = false;
+	gearPosition = 1;
+	gearTarget = 1;
 };
 var DEFAULT_FLIGHT_CONTACTS = {
 	wheels: [new Vector3(-0.92, -1.36, -0.6), new Vector3(0.92, -1.36, -0.6)],
@@ -170,6 +178,7 @@ function stepFlight(e, t, n, r, i, a = DEFAULT_FLIGHT_CONTACTS) {
 	};
 	let s = e.health;
 	e.t += i;
+	updateLandingGear(e, t, i);
 	flightForwardVector.set(0, 0, -1).applyQuaternion(e.quat);
 	flightUpVector.set(0, 1, 0).applyQuaternion(e.quat);
 	flightRightVector.set(1, 0, 0).applyQuaternion(e.quat);
@@ -209,7 +218,7 @@ function stepFlight(e, t, n, r, i, a = DEFAULT_FLIGHT_CONTACTS) {
 		let n = getLiftCoefficient(t, e.alpha, m) * (0.45 + s.wings * 0.55);
 		let r = Math.sin(e.alpha);
 		let i =
-			t.cd0 * (1 + (1 - s.wings) * 1.5) +
+			getGearParasiteDrag(e, t) * (1 + (1 - s.wings) * 1.5) +
 			t.flapCd * m * m +
 			t.inducedK * n * n +
 			r * 1.1 * r;
@@ -252,7 +261,9 @@ function stepFlight(e, t, n, r, i, a = DEFAULT_FLIGHT_CONTACTS) {
 		flightAngularAcceleration.z += Math.sin(e.t * 1.7) * 2.2 * Math.min(_, 1);
 	}
 	let S = e.pos.y - r.groundHeight(e.pos.x, e.pos.z) < 8;
-	let C = e.wheels;
+	let wasOnGround = e.onGround;
+	let bodyContact = false;
+	let gearDown = isGearDownLocked(e, t);
 	e.wheels = 0;
 	flightGroundTorque.set(0, 0, 0);
 	let w = false;
@@ -322,24 +333,30 @@ function stepFlight(e, t, n, r, i, a = DEFAULT_FLIGHT_CONTACTS) {
 			);
 			return true;
 		};
-		let c = n.brake ? `brake` : `wheel`;
-		for (let t of a.wheels) {
-			if (s(t, c)) {
+		if (gearDown) {
+			let c = n.brake ? `brake` : `wheel`;
+			for (let t of a.wheels) {
+				if (s(t, c)) {
+					e.wheels++;
+				}
+			}
+			if (s(a.third, a.tricycle ? `wheel` : t.skidFriction)) {
 				e.wheels++;
 			}
 		}
-		if (s(a.third, a.tricycle ? `wheel` : t.skidFriction)) {
-			e.wheels++;
-		}
 		let l = t.crashSpeed * CRASH_SPEED_TOLERANCE;
-		for (let t of a.crash) {
-			flightContactOffset.copy(t.p).applyQuaternion(e.quat);
+		for (let contact of a.crash) {
+			if (contact.kind === `belly` && (!t.retractableGear || gearDown)) {
+				continue;
+			}
+			flightContactOffset.copy(contact.p).applyQuaternion(e.quat);
 			flightContactPosition.copy(e.pos).add(flightContactOffset);
 			let n = r.groundHeight(flightContactPosition.x, flightContactPosition.z);
 			let i = Math.max(n, 0);
 			if (flightContactPosition.y >= i) {
 				continue;
 			}
+			if (!gearDown) bodyContact = true;
 			if (n < -0.3) {
 				w = true;
 			}
@@ -347,39 +364,45 @@ function stepFlight(e, t, n, r, i, a = DEFAULT_FLIGHT_CONTACTS) {
 				.crossVectors(flightWorldAngularVelocity, flightContactOffset)
 				.add(e.vel);
 			let a = flightContactVelocity.length();
-			if (t.kind === `prop`) {
+			if (contact.kind === `belly`) {
+				o.scrape = true;
+				if (-flightContactVelocity.y > l || a > l * 5) {
+					o.crashed = `Gear-up landing`;
+				}
+				s(contact.p, t.skidFriction);
+			} else if (contact.kind === `prop`) {
 				if (e.rpm > 0.15) {
 					o.propStrike = true;
 				}
 				if (a > l * 2) {
 					o.crashed = `Nosed over`;
 				}
-				s(t.p, 0.6);
-			} else if (t.kind === `top`) {
+				s(contact.p, 0.6);
+			} else if (contact.kind === `top`) {
 				o.crashed = `Flipped over`;
-			} else if (t.kind === `tail`) {
+			} else if (contact.kind === `tail`) {
 				if (-flightContactVelocity.y > l * 1.5) {
 					o.crashed = `Tail strike`;
 				}
 				o.scrape = true;
-				s(t.p, 0.5);
-			} else if (t.kind === `nose` && a > l) {
+				s(contact.p, 0.5);
+			} else if (contact.kind === `nose` && a > l) {
 				o.crashed = `Nosed in`;
 			} else if (
-				t.kind === `wing` &&
+				contact.kind === `wing` &&
 				(-flightContactVelocity.y > l * 0.6 || a > l * 3)
 			) {
 				o.crashed = `Cartwheeled`;
 			} else {
 				o.scrape = true;
-				s(t.p, 0.7);
+				s(contact.p, 0.7);
 			}
 		}
 		if (w && (e.wheels > 0 || o.scrape || o.crashed)) {
 			o.splash = true;
 			o.crashed = `Ditched in the water`;
 		}
-		if (e.wheels > 0) {
+		if (e.wheels > 0 || bodyContact) {
 			flightScratchVector
 				.copy(flightGroundTorque)
 				.applyQuaternion(flightInverseQuaternion);
@@ -389,23 +412,27 @@ function stepFlight(e, t, n, r, i, a = DEFAULT_FLIGHT_CONTACTS) {
 			let r = Math.atan2(flightRightVector.y, flightUpVector.y);
 			flightAngularAcceleration.y += x * t.yawStab * _ * 0.75 - y.y * 3.5;
 			flightAngularAcceleration.z += -y.z * 4 - r * 12;
-			let i = Math.hypot(e.vel.x, e.vel.z);
-			flightAngularAcceleration.y +=
-				-(n.yaw + n.roll * 0.6) *
-				t.groundSteer *
-				Math.min(i / 4, 1) *
-				Math.max(0, 1 - i / 40);
+			if (e.wheels > 0) {
+				let i = Math.hypot(e.vel.x, e.vel.z);
+				flightAngularAcceleration.y +=
+					-(n.yaw + n.roll * 0.6) *
+					t.groundSteer *
+					Math.min(i / 4, 1) *
+					Math.max(0, 1 - i / 40);
+			}
 		}
 	}
-	if (e.wheels > 0 && C === 0 && e.airTime > 0.6) {
+	let groundContact = e.wheels > 0 || bodyContact;
+	if (groundContact && !wasOnGround && e.airTime > 0.6) {
 		let t = Math.abs(Math.atan2(flightRightVector.y, flightUpVector.y));
 		o.touchdown = {
 			sink: Math.max(0, -e.lastSink),
 			bank: t,
 			speed: l,
 		};
+		if (bodyContact) o.touchdown.gearUp = true;
 	}
-	if (e.wheels === 0) {
+	if (!groundContact) {
 		e.lastSink = e.vel.y;
 	}
 	e.vel.addScaledVector(flightTotalForce, i / t.mass);
@@ -426,7 +453,7 @@ function stepFlight(e, t, n, r, i, a = DEFAULT_FLIGHT_CONTACTS) {
 		o.crashed =
 			o.crashed ?? (E < 0 ? `Ditched in the water` : `Hit the ground`);
 	}
-	e.onGround = e.wheels > 0;
+	e.onGround = groundContact;
 	if (e.onGround) {
 		e.groundTime += i;
 		e.airTime = 0;
@@ -458,12 +485,18 @@ function createTouchControlLayout(e, t, n) {
 	let i = t - n.b - r * 18;
 	let a = r * 46;
 	let o = e - n.r - r * 14 - a;
-	let s = Math.max(n.t + 46 + 104 + 14, t * 0.3);
+	// Reserve room below the minimap for gear, clear of the ATC radio panel.
+	let s = Math.max(n.t + 120 + r * 78, t * 0.3);
 	let c = {
 		x: o,
 		y: s,
 		w: a,
 		h: Math.max(r * 90, i - s),
+	};
+	let gearButton = {
+		x: c.x + c.w / 2,
+		y: n.t + 120 + r * 35,
+		r: r * 23,
 	};
 	let l = r * 34;
 	let u = {
@@ -519,6 +552,7 @@ function createTouchControlLayout(e, t, n) {
 		},
 		lever: c,
 		buttons: {
+			gear: gearButton,
 			pause: v,
 			camera: g,
 			bail: _,
@@ -534,11 +568,12 @@ var touchCircleContainsPoint = (e, t, n, r) =>
 	(t - e.x) ** 2 + (n - e.y) ** 2 <= (e.r + r) ** 2;
 var touchRectangleContainsPoint = (e, t, n, r) =>
 	t >= e.x - r && t <= e.x + e.w + r && n >= e.y - r && n <= e.y + e.h + r;
-function hitTestTouchControls(e, t, n, r) {
+function hitTestTouchControls(e, t, n, r, gearShown = false) {
 	let i = TOUCH_HIT_PADDING * e.u;
 	let a = null;
 	let o = Infinity;
 	for (let s of Object.keys(e.buttons)) {
+		if (s === `gear` && !gearShown) continue;
 		if (s === `bail` && !r) {
 			continue;
 		}
@@ -612,6 +647,7 @@ function tiltAttitudeToStick(e, t) {
 var TouchHud = class {
 	layout;
 	bailShown = false;
+	gearShown = false;
 	throttle = 0;
 	ptrs = new Map();
 	actions = new Set();
@@ -633,7 +669,13 @@ var TouchHud = class {
 		this.layout = createTouchControlLayout(e, t, n);
 	}
 	down(e, t, n, r) {
-		let i = hitTestTouchControls(this.layout, t, n, this.bailShown);
+		let i = hitTestTouchControls(
+			this.layout,
+			t,
+			n,
+			this.bailShown,
+			this.gearShown,
+		);
 		if (!i || (i === `stick` && this.find(`stick`))) {
 			return null;
 		} else {
@@ -657,6 +699,7 @@ var TouchHud = class {
 			} else if (
 				i === `pause` ||
 				i === `camera` ||
+				i === `gear` ||
 				i === `flapsMore` ||
 				i === `flapsLess`
 			) {
@@ -867,52 +910,53 @@ var TouchFlightControls = class e {
 	};
 };
 var KEYBOARD_AXIS_SLEW_RATE = 4.5;
+
 export {
+	CRASH_SPEED_TOLERANCE,
+	createFlightInput,
+	createTouchControlLayout,
+	DEFAULT_FLIGHT_CONTACTS,
+	DEFAULT_FLIGHT_SPEC,
 	deviceOrientationToFlightAttitude,
-	flightContactOffset,
-	getFlapStallAngle,
-	flightLocalAirVelocity,
-	flightGroundTorque,
-	flightTotalForce,
+	FLAP_DEFLECTION_RADIANS,
 	FLAP_LABELS,
 	FLAP_POSITIONS,
-	flightGroundRight,
-	TOUCH_STICK_DEADZONE,
-	stepFlight,
-	flightContactForce,
-	touchCircleContainsPoint,
-	TOUCH_HIT_PADDING,
-	flightScratchVector,
-	flightWorldAngularVelocity,
-	flightContactVelocity,
-	flightAngularAcceleration,
-	flightGroundForward,
-	getTouchLeverThrottle,
-	flightRotationDelta,
-	flightAirVelocity,
-	TouchHud,
-	flightLiftDirection,
-	getGroundRestQuaternion,
-	getLiftCoefficient,
-	getGroundRestHeight,
-	hitTestTouchControls,
-	touchRectangleContainsPoint,
-	shapeTouchStickAxis,
 	FlightState,
-	flightUpVector,
-	tiltAttitudeToStick,
-	createFlightInput,
-	DEFAULT_FLIGHT_SPEC,
-	flightContactPosition,
-	flightInverseQuaternion,
-	CRASH_SPEED_TOLERANCE,
-	TouchFlightControls,
-	FLAP_DEFLECTION_RADIANS,
-	createTouchControlLayout,
-	KEYBOARD_AXIS_SLEW_RATE,
-	DEFAULT_FLIGHT_CONTACTS,
 	flightAirDirection,
-	flightRightVector,
+	flightAirVelocity,
+	flightAngularAcceleration,
+	flightContactForce,
+	flightContactOffset,
+	flightContactPosition,
+	flightContactVelocity,
 	flightForwardVector,
 	flightGroundContactOffset,
+	flightGroundForward,
+	flightGroundRight,
+	flightGroundTorque,
+	flightInverseQuaternion,
+	flightLiftDirection,
+	flightLocalAirVelocity,
+	flightRightVector,
+	flightRotationDelta,
+	flightScratchVector,
+	flightTotalForce,
+	flightUpVector,
+	flightWorldAngularVelocity,
+	getFlapStallAngle,
+	getGroundRestHeight,
+	getGroundRestQuaternion,
+	getLiftCoefficient,
+	getTouchLeverThrottle,
+	hitTestTouchControls,
+	KEYBOARD_AXIS_SLEW_RATE,
+	shapeTouchStickAxis,
+	stepFlight,
+	TOUCH_HIT_PADDING,
+	TOUCH_STICK_DEADZONE,
+	TouchFlightControls,
+	TouchHud,
+	tiltAttitudeToStick,
+	touchCircleContainsPoint,
+	touchRectangleContainsPoint,
 };

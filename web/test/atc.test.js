@@ -487,3 +487,67 @@ test("infeasible go-around cancels clearance and free flight offers another fiel
 		/terrain|safe approach/i,
 	);
 });
+
+test("ATC reminds low approaches about unlocked gear with simulation cooldown", () => {
+	const controller = create();
+	approach(controller);
+	const inbound = observation(
+		{ x: 9000, z: 0, y: 160 },
+		{
+			onGround: false,
+			airTime: 10,
+			gearRetractable: true,
+			gearDownLocked: false,
+		},
+	);
+	controller.update(1, inbound);
+	assert.match(controller.snapshot().latestInstruction, /gear.*down.*locked/i);
+	const messageId = controller.snapshot().messages.at(-1).id;
+	controller.update(1, inbound);
+	assert.equal(controller.snapshot().messages.at(-1).id, messageId);
+	controller.update(14, inbound);
+	assert.notEqual(controller.snapshot().messages.at(-1).id, messageId);
+	controller.update(1, { ...inbound, gearDownLocked: true });
+	assert.match(
+		controller.snapshot().latestInstruction,
+		/gear down and locked.*continue/i,
+	);
+});
+
+test("gear reminders preserve pending clearances and ignore fixed or legacy aircraft", () => {
+	for (const gear of [{}, { gearRetractable: false, gearDownLocked: false }]) {
+		const controller = create();
+		approach(controller);
+		const before = controller.snapshot().messages.length;
+		controller.update(
+			1,
+			observation(
+				{ x: 9000, z: 0, y: 160 },
+				{
+					onGround: false,
+					airTime: 10,
+					...gear,
+				},
+			),
+		);
+		assert.equal(controller.snapshot().messages.length, before);
+	}
+	const controller = create();
+	approach(controller);
+	act(controller, "request-landing");
+	const instruction = controller.snapshot().latestInstruction;
+	controller.update(
+		1,
+		observation(
+			{ x: 9000, z: 0, y: 160 },
+			{
+				onGround: false,
+				airTime: 10,
+				gearRetractable: true,
+				gearDownLocked: false,
+			},
+		),
+	);
+	assert.equal(controller.snapshot().latestInstruction, instruction);
+	assert.ok(action(controller, "readback"));
+});

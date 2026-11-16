@@ -42,6 +42,7 @@ If the game runs slowly, select **Low** graphics.
 | Rudder / ground steering     | Q / E          |
 | Increase / decrease throttle | Shift / Ctrl   |
 | Extend / retract flaps       | F / V          |
+| Toggle landing gear          | G              |
 | Hold brakes                  | B              |
 | Change camera                | C              |
 | Open / close ATC radio       | T              |
@@ -49,8 +50,13 @@ If the game runs slowly, select **Low** graphics.
 | Restart flight               | R              |
 
 On touch screens, drag on the left half to steer and use the throttle lever on
-the right. Drag down to climb. Flaps, brakes, camera, and radio have on-screen
+the right. Drag down to climb. Flaps, gear, brakes, camera, and radio have on-screen
 buttons. More controls, including gamepad controls, are listed in the main menu.
+
+The turboprop and jet have retractable landing gear. Press **G** or tap **GEAR**
+after takeoff to reduce drag. The HUD shows **DOWN**, **TRANSIT**, or **UP** as
+the wheels move. Lower the gear before landing and wait for **DOWN**. Retraction
+is blocked on the ground. The biplane has fixed gear and no gear button.
 
 ## Guided ATC
 

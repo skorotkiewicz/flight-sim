@@ -52,6 +52,7 @@ class AtcController {
 		this.actionEpoch = 0;
 		this.actionSignature = "";
 		this.warningTimes = new Map();
+		this.gearWarningActive = false;
 		this.failedArrivals = new Map();
 		this.lastRepeat = -Infinity;
 		this.observation = null;
@@ -508,7 +509,37 @@ class AtcController {
 			this.revision += 1;
 		}
 		this.advanceGuide();
+		this.checkLandingGear(observation);
 		this.syncActions();
+	}
+
+	checkLandingGear(observation) {
+		if (!["approach", "landing"].includes(this.phase) || observation.onGround) {
+			this.gearWarningActive = false;
+			return;
+		}
+		if (this.pending || observation.gearRetractable !== true) return;
+		if (observation.gearDownLocked === true) {
+			if (this.gearWarningActive) {
+				this.gearWarningActive = false;
+				this.warningTimes.delete("landing-gear");
+				this.say("Baron One, gear down and locked. Continue the approach.");
+			}
+			return;
+		}
+		if (observation.gearDownLocked !== false || !this.arrivalAirport) return;
+		const height = observation.pos.y - observation.groundHeight;
+		if (
+			height > 5 &&
+			height < 300 &&
+			distance(observation.pos, this.arrivalAirport) < 3500
+		) {
+			this.gearWarningActive = true;
+			this.warn(
+				"landing-gear",
+				"Baron One, check landing gear. Lower the gear and confirm DOWN and locked before touchdown.",
+			);
+		}
 	}
 
 	guide() {

@@ -1,7 +1,9 @@
-import { FLAP_LABELS, FLAP_POSITIONS } from "../flight/flight.js";
-import { InstrumentCluster } from "./instruments.js";
-import { getPlaneEngineKind } from "../plane/planemodels.js";
 import { MathUtils, Vector2, Vector3 } from "../core/three.js";
+import { FLAP_LABELS, FLAP_POSITIONS } from "../flight/flight.js";
+import { getGearStatus, isGearDownLocked } from "../flight/landing-gear.js";
+import { getPlaneEngineKind } from "../plane/planemodels.js";
+import { InstrumentCluster } from "./instruments.js";
+
 var HUD_OUTLINE_COLOR = `#2b1d1a`;
 var HUD_PANEL_COLOR = `#fff6dd`;
 var HUD_SUCCESS_COLOR = `#2a9d8f`;
@@ -12,6 +14,23 @@ var hudProjectionScratch = new Vector3();
 var hudForwardScratch = new Vector3();
 var hudUpScratch = new Vector3();
 var hudRightScratch = new Vector3();
+function shouldWarnGearDown(e) {
+	let t = e.player.s;
+	return (
+		e.player.spec.retractableGear &&
+		e.showLanding &&
+		!t.onGround &&
+		(t.vel.y < -0.5 || t.flaps > 0) &&
+		!isGearDownLocked(t, e.player.spec)
+	);
+}
+function gearStatusColor(e) {
+	return e === `DOWN`
+		? HUD_SUCCESS_COLOR
+		: e === `TRANSIT`
+			? HUD_ACCENT_COLOR
+			: HUD_OUTLINE_COLOR;
+}
 function traceHudRoundedRect(e, t, n, r, i, a) {
 	e.beginPath();
 	e.moveTo(t + a, n);
@@ -108,9 +127,9 @@ var Hud = class {
 			return;
 		}
 		n.save();
-		n.translate(16, this.h - 16 - a * 218);
+		n.translate(16, this.h - 16 - a * 250);
 		n.scale(a, a);
-		drawHudPanel(n, 0, 0, 220, 218);
+		drawHudPanel(n, 0, 0, 220, 250);
 		let c = r.airspeed * 3.6;
 		let l = r.pos.y - Math.max(e.world.groundHeight(r.pos.x, r.pos.z), 0);
 		n.fillStyle = HUD_OUTLINE_COLOR;
@@ -153,6 +172,20 @@ var Hud = class {
 				: `rpm ${Math.round(r.rpm * (f === `turbo` ? 2000 : 1400))}`;
 		n.fillText(`${Math.round(r.throttle * 100)}%   ${p}`, 16, 142);
 		this.drawFlaps(n, e.flapNotch, r.flaps, r.flapsBlown);
+		let gearStatus = getGearStatus(r, e.player.spec);
+		let gearWarning = shouldWarnGearDown(e);
+		n.font = `800 13px ${HUD_FONT_FAMILY}`;
+		n.fillStyle = HUD_OUTLINE_COLOR;
+		n.fillText(`GEAR`, 14, 234);
+		n.fillStyle = gearWarning ? HUD_WARNING_COLOR : gearStatusColor(gearStatus);
+		n.fillText(gearStatus, 58, 234);
+		n.font = `800 11px ${HUD_FONT_FAMILY}`;
+		if (gearWarning) {
+			n.fillText(`GEAR DOWN!`, 124, 234);
+		} else if (e.player.spec.retractableGear) {
+			n.fillStyle = `#6b4b2a`;
+			n.fillText(`(G)`, 182, 234);
+		}
 		n.restore();
 		n.save();
 		n.translate(this.w - 16 - a * 120, this.h - 16 - a * 150);
@@ -622,7 +655,10 @@ var Hud = class {
 		let a = r.buttons.pause;
 		let o = r.safe.l + r.u * 12;
 		let s = a.y + a.r + r.u * 10;
-		drawHudPanel(n, o, s, 158, 84);
+		let gearShown = e.player.spec.retractableGear;
+		let gearWarning = shouldWarnGearDown(e);
+		let panelHeight = 84 + (gearShown ? 26 : 0) + (gearWarning ? 24 : 0);
+		drawHudPanel(n, o, s, 158, panelHeight);
 		let c = i.pos.y - Math.max(e.world.groundHeight(i.pos.x, i.pos.z), 0);
 		let l = (e, t, r, i, a = HUD_OUTLINE_COLOR) => {
 			n.fillStyle = HUD_OUTLINE_COLOR;
@@ -655,8 +691,17 @@ var Hud = class {
 			n.fillStyle = `#6b4b2a`;
 			n.fillText(`FLAPS ${FLAP_LABELS[e.flapNotch]}`, o + 10, s + 70);
 		}
+		if (gearShown) {
+			let gearStatus = getGearStatus(i, e.player.spec);
+			n.fillStyle = gearStatusColor(gearStatus);
+			n.fillText(`GEAR ${gearStatus}`, o + 10, s + 96);
+		}
+		if (gearWarning) {
+			n.fillStyle = HUD_WARNING_COLOR;
+			n.fillText(`GEAR DOWN!`, o + 10, s + 120);
+		}
 		n.save();
-		n.translate(o + 158 - 20, s + 84 - 22);
+		n.translate(o + 158 - 20, s + panelHeight - 22);
 		n.scale(0.3, 0.3);
 		this.drawDamage(n, 0, 0, i.health);
 		n.restore();
@@ -755,6 +800,20 @@ var Hud = class {
 		n.globalAlpha = 1;
 		let b = r.buttons;
 		let x = e.player.s.flapsBlown;
+		if (e.player.spec.retractableGear && b.gear && t.gearShown !== false) {
+			let held = t.held(`gear`);
+			let offset = held ? 2 : 0;
+			let gearStatus = getGearStatus(e.player.s, e.player.spec);
+			this.touchButton(b.gear, ``, held, a(11));
+			n.textAlign = `center`;
+			n.fillStyle = held ? `#fff` : HUD_OUTLINE_COLOR;
+			n.font = a(12);
+			n.fillText(`GEAR`, b.gear.x + offset, b.gear.y + offset - i * 4);
+			n.fillStyle = held ? `#fff` : gearStatusColor(gearStatus);
+			n.font = a(10);
+			n.fillText(gearStatus, b.gear.x + offset, b.gear.y + offset + i * 11);
+			n.textAlign = `left`;
+		}
 		this.touchButton(b.flapsLess, `FLAP −`, t.held(`flapsLess`), a(11));
 		this.touchButton(b.flapsMore, `FLAP +`, t.held(`flapsMore`), a(11));
 		n.font = a(12);
@@ -816,18 +875,19 @@ var Hud = class {
 		}
 	}
 };
+
 export {
-	HUD_WARNING_COLOR,
-	hudRightScratch,
-	hudProjectionScratch,
-	Hud,
-	traceHudRoundedRect,
-	HUD_PANEL_COLOR,
-	HUD_OUTLINE_COLOR,
-	HUD_SUCCESS_COLOR,
-	hudForwardScratch,
-	HUD_FONT_FAMILY,
-	hudUpScratch,
 	drawHudPanel,
 	HUD_ACCENT_COLOR,
+	HUD_FONT_FAMILY,
+	HUD_OUTLINE_COLOR,
+	HUD_PANEL_COLOR,
+	HUD_SUCCESS_COLOR,
+	HUD_WARNING_COLOR,
+	Hud,
+	hudForwardScratch,
+	hudProjectionScratch,
+	hudRightScratch,
+	hudUpScratch,
+	traceHudRoundedRect,
 };

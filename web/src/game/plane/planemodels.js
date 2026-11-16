@@ -1,16 +1,4 @@
 import {
-	FlightState,
-	createFlightInput,
-	DEFAULT_FLIGHT_SPEC,
-	FLAP_DEFLECTION_RADIANS,
-} from "../flight/flight.js";
-import {
-	createOutlinedMesh,
-	mergeParts,
-	createTaperedFuselageGeometry,
-	makeMesh,
-} from "./meshkit.js";
-import {
 	BoxGeometry,
 	CircleGeometry,
 	Color,
@@ -24,6 +12,19 @@ import {
 	Quaternion,
 	Vector3,
 } from "../core/three.js";
+import {
+	createFlightInput,
+	DEFAULT_FLIGHT_SPEC,
+	FLAP_DEFLECTION_RADIANS,
+	FlightState,
+} from "../flight/flight.js";
+import {
+	createOutlinedMesh,
+	createTaperedFuselageGeometry,
+	makeMesh,
+	mergeParts,
+} from "./meshkit.js";
+
 var DEFAULT_PLANE_LOADOUT = {
 	style: `biplane`,
 	paint: `sunflower`,
@@ -153,6 +154,8 @@ function getPlaneLivery(e) {
 var PLANE_MODELS = {
 	biplane: {
 		spec: {},
+		retractableGear: false,
+		gearDrag: 0,
 		engine: `prop`,
 		gear: `taildragger`,
 		mains: [
@@ -194,6 +197,8 @@ var PLANE_MODELS = {
 		],
 	},
 	turboprop: {
+		retractableGear: true,
+		gearDrag: 0.006,
 		spec: {
 			mass: 1300,
 			wingArea: 16,
@@ -247,6 +252,8 @@ var PLANE_MODELS = {
 		],
 	},
 	jet: {
+		retractableGear: true,
+		gearDrag: 0.005,
 		spec: {
 			mass: 2500,
 			wingArea: 22,
@@ -387,6 +394,8 @@ function buildFlightSpec(e) {
 	i.cd0 += r.cd0Add;
 	i.gripPaved = r.gripPaved;
 	i.gripGrass = r.gripGrass;
+	i.retractableGear = t.retractableGear;
+	i.gearDrag = t.gearDrag;
 	return i;
 }
 function getPlaneEngineKind(e) {
@@ -406,6 +415,9 @@ function buildFlightContacts(e) {
 		kind: e.kind,
 	}));
 	let o = PLANE_ENGINE_SPECS[t.engine].propRadius;
+	if (t.retractableGear) {
+		a.push({ p: new Vector3(0, -0.65, 0), kind: `belly` });
+	}
 	if (o > 0) {
 		let e = t.engineMount;
 		a.push({
@@ -761,14 +773,6 @@ function createTurbopropParts(e) {
 			pos: [0, 0.35, 3.6],
 			flat: true,
 		}),
-		...[-1.35, 1.35].map((e) =>
-			makeMesh(new BoxGeometry(0.1, 0.55, 0.1), PLANE_METAL_COLOR, {
-				pos: [e, -0.78, 0.35],
-			}),
-		),
-		makeMesh(new BoxGeometry(0.1, 0.45, 0.1), PLANE_METAL_COLOR, {
-			pos: [0, -0.85, -2.5],
-		}),
 	];
 	if (e.stripe) {
 		t.push(
@@ -779,6 +783,20 @@ function createTurbopropParts(e) {
 	}
 	return {
 		body: t,
+		gear: [
+			...[-1.35, 1.35].map((x) => ({
+				at: [x, -0.505, 0.35],
+				strut: makeMesh(new BoxGeometry(0.1, 0.55, 0.1), PLANE_METAL_COLOR, {
+					pos: [x, -0.78, 0.35],
+				}),
+			})),
+			{
+				at: [0, -0.625, -2.5],
+				strut: makeMesh(new BoxGeometry(0.1, 0.45, 0.1), PLANE_METAL_COLOR, {
+					pos: [0, -0.85, -2.5],
+				}),
+			},
+		],
 		cockpit: [
 			makeMesh(new IcosahedronGeometry(0.62, 1), PLANE_GLASS_COLOR, {
 				pos: [0, 0.55, -0.7],
@@ -886,14 +904,6 @@ function createJetParts(e) {
 			pos: [0, 0.05, 4.76],
 			rot: [Math.PI / 2, 0, 0],
 		}),
-		...[-1.3, 1.3].map((e) =>
-			makeMesh(new BoxGeometry(0.1, 0.7, 0.1), PLANE_METAL_COLOR, {
-				pos: [e, -0.55, 0.7],
-			}),
-		),
-		makeMesh(new BoxGeometry(0.1, 0.45, 0.1), PLANE_METAL_COLOR, {
-			pos: [0, -0.7, -2.9],
-		}),
 	];
 	if (e.stripe) {
 		r.push(
@@ -904,6 +914,20 @@ function createJetParts(e) {
 	}
 	return {
 		body: r,
+		gear: [
+			...[-1.3, 1.3].map((x) => ({
+				at: [x, -0.2, 0.7],
+				strut: makeMesh(new BoxGeometry(0.1, 0.7, 0.1), PLANE_METAL_COLOR, {
+					pos: [x, -0.55, 0.7],
+				}),
+			})),
+			{
+				at: [0, -0.475, -2.9],
+				strut: makeMesh(new BoxGeometry(0.1, 0.45, 0.1), PLANE_METAL_COLOR, {
+					pos: [0, -0.7, -2.9],
+				}),
+			},
+		],
 		cockpit: [
 			makeMesh(new IcosahedronGeometry(0.55, 1), PLANE_GLASS_COLOR, {
 				pos: [0, 0.55, -2.4],
@@ -971,6 +995,7 @@ var LandingGear = class {
 	disc = null;
 	flames = [];
 	flameMat = null;
+	gearAssemblies = [];
 	ailL = new Group();
 	ailR = new Group();
 	flapL = new Group();
@@ -989,20 +1014,32 @@ var LandingGear = class {
 		let a = PLANE_WHEEL_SPECS[e.wheels];
 		let o = PLANE_PART_BUILDERS[e.style](r);
 		let s = o.body;
-		for (let e of i.mains) {
-			s.push(...createPlaneWheelParts(e, a.radius, a.width, r.accent));
-		}
-		if (i.gear === `tricycle`) {
-			s.push(
-				...createPlaneWheelParts(
-					i.third,
-					a.radius * 0.85,
-					a.width * 0.9,
-					r.accent,
-				),
+		const wheelCenters = [...i.mains];
+		if (i.gear === `tricycle`) wheelCenters.push(i.third);
+		for (const [index, center] of wheelCenters.entries()) {
+			const nose = index === 2;
+			const parts = createPlaneWheelParts(
+				center,
+				a.radius * (nose ? 0.85 : 1),
+				a.width * (nose ? 0.9 : 1),
+				r.accent,
 			);
+			if (i.retractableGear) {
+				const support = o.gear[index];
+				parts.push(support.strut);
+				const assembly = new Group();
+				assembly.name = [`gear-left`, `gear-right`, `gear-nose`][index];
+				assembly.position.set(...support.at);
+				const geometry = mergeParts(parts);
+				geometry.translate(-support.at[0], -support.at[1], -support.at[2]);
+				assembly.add(createOutlinedMesh(geometry, t, n));
+				this.gearAssemblies.push(assembly);
+			} else {
+				s.push(...parts);
+			}
 		}
 		this.root.add(createOutlinedMesh(mergeParts(s), t, n));
+		for (const assembly of this.gearAssemblies) this.root.add(assembly);
 		this.cockpit = createOutlinedMesh(mergeParts(o.cockpit), t, n);
 		this.root.add(this.cockpit);
 		this.buildDash(i.eye, r, t);
@@ -1132,7 +1169,14 @@ var LandingGear = class {
 		this.dash.visible = false;
 		this.root.add(this.dash);
 	}
-	animate(e, t, n, r, i, a = 0) {
+	animate(e, t, n, r, i, a = 0, gearPosition = 1) {
+		const extension = MathUtils.clamp(gearPosition, 0, 1);
+		const fold = ((1 - extension) * Math.PI) / 2;
+		this.gearAssemblies.forEach((assembly, index) => {
+			assembly.visible = extension > 0;
+			if (index === 2) assembly.rotation.x = -fold;
+			else assembly.rotation.z = index === 0 ? fold : -fold;
+		});
 		if (this.hasProp) {
 			this.prop.rotation.z += i * 95 * e + (i > 0.02 ? e * 6 : 0);
 			this.disc.material.opacity = MathUtils.clamp((i - 0.25) * 0.5, 0, 0.3);
@@ -1226,6 +1270,7 @@ var Aircraft = class {
 			this.input.yaw,
 			this.s.rpm,
 			this.s.flaps,
+			this.s.gearPosition ?? 1,
 		);
 	}
 	get integrity() {
@@ -1233,45 +1278,46 @@ var Aircraft = class {
 		return Math.min(e.engine, e.wings, e.tail, e.pilot);
 	}
 };
+
 export {
-	createSweptTailFinGeometry,
-	formatPlaneLoadout,
-	PLANE_DARK_COLOR,
-	PLANE_WOOD_COLOR,
-	createJetParts,
-	PLANE_PART_BUILDERS,
-	LandingGear,
-	createPlaneRoundelParts,
+	Aircraft,
+	buildFlightContacts,
+	buildFlightSpec,
 	createBiplaneParts,
-	PLANE_TIRE_COLOR,
-	PLANE_MODELS,
-	PLANE_STYLES,
+	createJetParts,
+	createPlaneRoundelParts,
+	createPlaneWheelParts,
+	createSweptTailFinGeometry,
 	createTurbopropParts,
 	DEFAULT_PLANE_LOADOUT,
-	Aircraft,
-	savePlaneLoadout,
-	PLANE_PROPELLER_METAL_COLOR,
-	PLANE_LOADOUT_STORAGE_KEY,
-	lightenPlaneColor,
-	parsePlaneLoadoutCode,
-	PLANE_ENGINE_SPECS,
-	getPlaneEngineKind,
-	PLANE_WHEEL_OPTIONS,
-	planePointToVector,
 	estimatePlanePerformance,
-	estimateThrustAtSpeed,
-	createPlaneWheelParts,
-	PLANE_GLASS_COLOR,
-	PLANE_WHEEL_SPECS,
 	estimateStallSpeed,
-	planePaintColor,
+	estimateThrustAtSpeed,
+	formatPlaneLoadout,
+	getPlaneEngineKind,
 	getPlaneLivery,
-	buildFlightContacts,
-	planePaintWhite,
-	PLANE_PAINT_OPTIONS,
-	buildFlightSpec,
-	PLANE_LOADOUT_ALLOWED_VALUES,
-	PLANE_METAL_COLOR,
+	LandingGear,
+	lightenPlaneColor,
 	loadPlaneLoadout,
+	PLANE_DARK_COLOR,
+	PLANE_ENGINE_SPECS,
+	PLANE_GLASS_COLOR,
+	PLANE_LOADOUT_ALLOWED_VALUES,
+	PLANE_LOADOUT_STORAGE_KEY,
+	PLANE_METAL_COLOR,
+	PLANE_MODELS,
+	PLANE_PAINT_OPTIONS,
+	PLANE_PART_BUILDERS,
+	PLANE_PROPELLER_METAL_COLOR,
+	PLANE_STYLES,
+	PLANE_TIRE_COLOR,
+	PLANE_WHEEL_OPTIONS,
+	PLANE_WHEEL_SPECS,
+	PLANE_WOOD_COLOR,
+	parsePlaneLoadoutCode,
+	planePaintColor,
+	planePaintWhite,
+	planePointToVector,
 	sanitizePlaneLoadout,
+	savePlaneLoadout,
 };
