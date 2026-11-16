@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <title>Baron — A biplane in every browser</title>
+    <meta
+      name="description"
+      content="A free cartoon flying game in your browser. Build your plane in the hangar, take off, explore a procedurally generated world and land it in one piece. Built with DAI Studio."
+    />
+    <link rel="icon" href="/flight-sim/favicon.ico" sizes="32x32 48x48" />
+    <link rel="icon" href="/flight-sim/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/flight-sim/apple-touch-icon.png" />
+    <link rel="manifest" href="/flight-sim/manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="application-name" content="Baron" />
+    <meta name="apple-mobile-web-app-title" content="Baron" />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#9fd3ef" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Luckiest+Guy&display=swap" rel="stylesheet" />
+    <script type="module" crossorigin src="/flight-sim/assets/index-DDGW7woS.js"></script>
+    <link rel="modulepreload" crossorigin href="/flight-sim/assets/three-_TQRFujC.js">
+    <link rel="modulepreload" crossorigin href="/flight-sim/assets/mission-B2Znh5Pb.js">
+    <link rel="stylesheet" crossorigin href="/flight-sim/assets/index-8bfO1PYL.css">
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <div id="whiteout"></div>
+    <canvas id="hud"></canvas>
+    <div id="hurt"></div>
+    <div id="toast"></div>
+    <div id="hint"></div>
+    <!-- Main menu over the terrain flyover -->
+    <section id="title" class="screen">
+      <div class="panel title-panel">
+        <h1 class="logo">BARON</h1>
+        <p class="tagline">Take off. Explore. Land it in one piece.</p>
+
+        <div class="row">
+          <span class="row-label" id="mode-label">Mission</span>
+          <fieldset class="seg" id="mode-seg" aria-labelledby="mode-label">
+            <button type="button" data-v="free">Free flight</button>
+            <button type="button" data-v="route">Cross-country</button>
+          </fieldset>
+        </div>
+        <div class="row">
+          <span class="row-label" id="assist-label">Flying</span>
+          <fieldset class="seg" id="assist-seg" aria-labelledby="assist-label">
+            <button type="button" data-v="arcade">Arcade</button>
+            <button type="button" data-v="normal">Normal</button>
+            <button type="button" data-v="expert">Expert</button>
+          </fieldset>
+        </div>
+        <div class="row">
+          <label for="seed-input">World seed</label>
+          <div class="seed">
+            <input id="seed-input" type="text" inputmode="numeric" maxlength="10" />
+            <button type="button" id="seed-roll" title="New random world">🎲</button>
+          </div>
+        </div>
+        <div class="row atc-option">
+          <label for="atc-enabled"><input id="atc-enabled" type="checkbox" aria-describedby="atc-note" /> Enable guided ATC</label>
+          <p id="atc-note" class="atc-note">Start parked. Request and read back taxi, takeoff and landing clearances.</p>
+        </div>
+        <div class="row">
+          <span class="row-label" id="quality-label">Graphics</span>
+          <fieldset class="seg" id="quality-seg" aria-labelledby="quality-label">
+            <button type="button" data-v="auto">Auto</button>
+            <button type="button" data-v="low">Low</button>
+            <button type="button" data-v="medium">Med</button>
+            <button type="button" data-v="high">High</button>
+          </fieldset>
+        </div>
+        <div class="row aircraft">
+          <span class="row-label">Aircraft</span>
+          <button type="button" id="open-hangar" title="Customize your plane (H)">🛠️ Hangar</button>
+        </div>
+        <div class="row aircraft-name" id="aircraft-name"></div>
+        <div class="row best" id="best-line"></div>
+        <!-- installable app (design §10): shown only when there is something to offer -->
+        <div class="app-row hidden" id="app-row">
+          <button type="button" id="update-btn" class="hidden">✨ New version ready — Restart</button>
+          <button type="button" id="install-btn" class="hidden">📲 Install app</button>
+          <p id="ios-tip" class="hidden">Install: tap <b>Share</b> then <b>Add to Home Screen</b> <button type="button" id="ios-tip-x" title="Hide">✕</button></p>
+        </div>
+        <button type="button" id="fly-btn" class="big">FLY!</button>
+        <details class="controls">
+          <summary>Controls</summary>
+          <table class="touch-only">
+            <tr><td>Fly</td><td>Left thumb: drag anywhere on the left half (drag down to climb)</td></tr>
+            <tr><td>Throttle</td><td>Lever on the right edge (double-tap = idle)</td></tr>
+            <tr><td>Flaps</td><td>FLAP + / FLAP − (UP, T/O, LAND)</td></tr>
+            <tr><td>Landing gear</td><td>GEAR toggles on turboprop and jet (DOWN, TRANSIT, UP)</td></tr>
+            <tr><td>Brakes</td><td>Hold BRAKE</td></tr>
+            <tr><td>Rudder</td><td>Automatic (the stick steers on the ground)</td></tr>
+            <tr><td>Camera</td><td>CAM (chase / cockpit)</td></tr>
+            <tr><td>Bail out</td><td>Hold BAIL for a second</td></tr>
+            <tr><td>Pause</td><td>❚❚ top-left</td></tr>
+            <tr><td>Radio</td><td>Tap Radio for ATC requests and readbacks</td></tr>
+            <tr><td>Tilt</td><td>Pause → Steer by tilting</td></tr>
+          </table>
+          <table class="desktop-only">
+            <tr><td>Pitch</td><td>W / S or ↑ / ↓ (S pulls up)</td></tr>
+            <tr><td>Roll</td><td>A / D or ← / →</td></tr>
+            <tr><td>Rudder</td><td>Q / E</td></tr>
+            <tr><td>Throttle</td><td>Shift / Ctrl (or 1–9, 0 = full)</td></tr>
+            <tr><td>Flaps</td><td>F more / V less (UP, T/O, LAND)</td></tr>
+            <tr><td>Landing gear</td><td>G toggles on turboprop and jet</td></tr>
+            <tr><td>Brakes</td><td>B</td></tr>
+            <tr><td>Camera</td><td>C (chase / cockpit)</td></tr>
+            <tr><td>Mouse stick</td><td>M toggles</td></tr>
+            <tr><td>Radio</td><td>T toggles guided ATC requests and readbacks</td></tr>
+            <tr><td>Bail out</td><td>X</td></tr>
+            <tr><td>Destination</td><td>← / → on the menu (Cross-country)</td></tr>
+            <tr><td>Pause / Restart</td><td>Esc or P / R</td></tr>
+            <tr><td>Gamepad</td><td>L-stick fly, R-stick X rudder / Y throttle</td></tr>
+          </table>
+        </details>
+      </div>
+
+      <!-- Cross-country flight plan: destination picker and route map (plan step 22) -->
+      <div class="panel route-panel hidden" id="route-panel">
+        <h2>Flight plan</h2>
+        <div class="dest-pick">
+          <button type="button" id="dest-prev" title="Previous destination (←)">◀</button>
+          <div class="dest-name"><span id="dest-from">Home Field</span> → <b id="dest-name"></b></div>
+          <button type="button" id="dest-next" title="Next destination (→)">▶</button>
+        </div>
+        <canvas id="route-map" width="720" height="540"></canvas>
+        <div class="route-info" id="route-info"></div>
+        <p class="route-note">Follow the white arrows from take-off to touchdown.</p>
+      </div>
+    </section>
+
+    <!-- Hangar: aircraft customization (design §8.1) -->
+    <section id="hangar-screen" class="screen hidden">
+      <div class="panel hangar-panel" id="hangar">
+        <h2>Hangar</h2>
+        <div class="tabs" id="hangar-tabs"></div>
+        <div id="hangar-cards" class="cards"></div>
+        <div id="hangar-name" class="hangar-name"></div>
+        <div id="hangar-stats" class="stats"></div>
+        <button type="button" id="close-hangar" class="big">Back to menu</button>
+        <p class="hangar-keys desktop-only">← → category · ↑ ↓ choose · drag to look around · Esc back</p>
+        <p class="hangar-keys touch-only">Tap a tab and a card · drag the plane to look around</p>
+      </div>
+    </section>
+
+    <section id="loading" class="screen hidden">
+      <div class="panel small">
+        <h2>Warming up the engine…</h2>
+        <div class="bar"><div id="load-bar"></div></div>
+      </div>
+    </section>
+
+    <section id="pause" class="screen hidden">
+      <div class="panel small">
+        <h2>Paused</h2>
+        <button type="button" id="resume-btn" class="big">Resume</button>
+        <button type="button" id="restart-btn">Restart sortie</button>
+        <button type="button" id="quit-btn">Main menu</button>
+        <div class="row">
+          <label for="volume">Volume</label>
+          <input id="volume" type="range" min="0" max="1" step="0.05" />
+        </div>
+        <div class="row">
+          <label><input id="shake" type="checkbox" /> Camera shake</label>
+        </div>
+        <div class="row">
+          <label><input id="invert" type="checkbox" /> Invert pitch</label>
+        </div>
+        <div class="row touch-only tilt-row">
+          <label><input id="tilt" type="checkbox" /> Steer by tilting</label>
+          <span id="tilt-note" class="note"></span>
+        </div>
+        <button type="button" id="recentre-btn" class="touch-only hidden">Re-centre tilt</button>
+      </div>
+    </section>
+
+    <section id="debrief" class="screen hidden">
+      <div class="panel">
+        <h2 id="debrief-title">Debrief</h2>
+        <div id="medal"></div>
+        <table id="debrief-stats"></table>
+        <div class="buttons">
+          <button type="button" id="again-btn" class="big">Fly again</button>
+          <button type="button" id="newworld-btn">New world</button>
+          <button type="button" id="hangar-btn">Main menu</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="nogl" class="screen hidden">
+      <div class="panel small">
+        <h2>Baron needs WebGL 2</h2>
+        <p>Your browser or graphics driver doesn't support WebGL 2. Try the latest Chrome, Edge, Firefox or Safari, and make sure hardware acceleration is turned on.</p>
+      </div>
+    </section>
+
+    <section id="ctxlost" class="screen hidden">
+      <div class="panel small">
+        <h2>Graphics hiccup</h2>
+        <p>The browser reset the graphics context. Hang on, restoring…</p>
+      </div>
+    </section>
+
+  </body>
+</html>
