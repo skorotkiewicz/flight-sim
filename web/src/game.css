@@ -20,7 +20,6 @@ body {
 	-webkit-text-size-adjust: 100%;
 	-moz-text-size-adjust: 100%;
 	text-size-adjust: 100%;
-	height: 100dvh;
 	font-family: var(--font);
 	color: var(--ink);
 	-webkit-user-select: none;
@@ -28,6 +27,12 @@ body {
 	background: #9fd3ef;
 	margin: 0;
 	overflow: hidden;
+}
+@supports (height: 100dvh) {
+	html,
+	body {
+		height: 100dvh;
+	}
 }
 #game,
 #hud {
@@ -300,7 +305,8 @@ body.touch.flying #built-with {
 	margin: 10px 0;
 	display: flex;
 }
-.row label {
+.row label,
+.row .row-label {
 	font-weight: 800;
 }
 .row.best {
@@ -342,6 +348,7 @@ button {
 	}
 }
 button.hidden {
+	/* biome-ignore lint/complexity/noImportantStyles: Hidden buttons must override component display rules. */
 	display: none !important;
 }
 button:active {
@@ -365,6 +372,10 @@ button.big {
 	display: block;
 }
 .seg {
+	min-inline-size: auto;
+	margin: 0;
+	border: 0;
+	padding: 0;
 	flex-wrap: wrap;
 	justify-content: flex-end;
 	gap: 6px;
@@ -630,6 +641,7 @@ input[type="range"] {
 }
 body:not(.touch) .touch-only,
 body.touch .desktop-only {
+	/* biome-ignore lint/complexity/noImportantStyles: Input-mode visibility must override component display rules. */
 	display: none !important;
 }
 body.touch button {
@@ -808,6 +820,7 @@ body.touch .seed input {
 }
 .app-row.hidden,
 .app-row .hidden {
+	/* biome-ignore lint/complexity/noImportantStyles: App prompts must stay hidden until their action is available. */
 	display: none !important;
 }
 #update-btn {

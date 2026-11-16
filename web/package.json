@@ -7,6 +7,7 @@
 		"dev": "vite",
 		"build": "vite build",
 		"preview": "vite preview",
+		"fmt": "biome format --write",
 		"lint": "biome lint --write --max-diagnostics 1000",
 		"lint:unsafe": "biome lint --write --unsafe --max-diagnostics 1000"
 	},
