@@ -360,12 +360,16 @@ var TerrainManager = class {
 			Math.min(r ? 2 : 4, (navigator.hardwareConcurrency || 4) - 1),
 		);
 		for (let e = 0; e < i; e++) {
-			let t = new Worker(
-				new URL(`/assets/chunk.worker.js`, `${import.meta.url}`),
-				{
-					type: `module`,
-				},
-			);
+			// let t = new Worker(
+			// 	new URL(`/assets/chunk.worker.js`, `${import.meta.url}`),
+			// 	{
+			// 		type: `module`,
+			// 	},
+			// );
+
+			let t = new Worker(`${import.meta.env.BASE_URL}assets/chunk.worker.js`, {
+				type: "module",
+			});
 			t.onmessage = (t) => {
 				this.idle[e] = true;
 				if (this.disposed) {
