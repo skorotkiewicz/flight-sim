@@ -1,4 +1,4 @@
-import { MathUtils } from "./three.js";
+import { MathUtils } from "../core/three.js";
 
 var SoundEngine = class {
   ctx = null;

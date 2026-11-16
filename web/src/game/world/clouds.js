@@ -1,10 +1,10 @@
 import { Um, Weather } from "./destinations.js";
-import { Rd, Vd } from "./meshkit.js";
+import { Rd, Vd } from "../plane/meshkit.js";
 import { am, im } from "./noise.js";
 import { TerrainManager, km } from "./props.js";
 import { np } from "./sky.js";
 import { Terrain } from "./terrain.js";
-import { Group, MathUtils, Matrix4, Quaternion, Vector3 } from "./three.js";
+import { Group, MathUtils, Matrix4, Quaternion, Vector3 } from "../core/three.js";
 
 var Wm = class {
   seed;

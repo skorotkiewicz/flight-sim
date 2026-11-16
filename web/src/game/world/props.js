@@ -1,6 +1,6 @@
-import { Fd, Nd, makeMesh } from "./meshkit.js";
+import { Fd, Nd, makeMesh } from "../plane/meshkit.js";
 import { ym } from "./terrain.js";
-import { BoxGeometry, BufferAttribute, BufferGeometry, Color, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial, SphereGeometry, Vector3 } from "./three.js";
+import { BoxGeometry, BufferAttribute, BufferGeometry, Color, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial, SphereGeometry, Vector3 } from "../core/three.js";
 
 var bm = 8225161;
 var xm = 16052712;

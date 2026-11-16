@@ -1,4 +1,4 @@
-import { MathUtils, Matrix4, Quaternion, Vector3 } from "./three.js";
+import { MathUtils, Matrix4, Quaternion, Vector3 } from "../core/three.js";
 
 var FLAP_POSITIONS = [0, 0.5, 1];
 var FLAP_LABELS = [`UP`, `T/O`, `LAND`];

@@ -1,5 +1,5 @@
-import { Cf, Sf, gf, uf } from "./planemodels.js";
-import { cp, op, up } from "./sky.js";
+import { Cf, Sf, gf, uf } from "../plane/planemodels.js";
+import { cp, op, up } from "../world/sky.js";
 
 var dp = e => document.getElementById(e);
 var Hangar = class {

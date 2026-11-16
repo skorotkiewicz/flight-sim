@@ -1,6 +1,6 @@
-import { _u, gu, hu, pu } from "./flight.js";
+import { _u, gu, hu, pu } from "../flight/flight.js";
 import { Fd, Nd, Pd, makeMesh } from "./meshkit.js";
-import { BoxGeometry, CircleGeometry, Color, ConeGeometry, CylinderGeometry, Group, IcosahedronGeometry, MathUtils, Mesh, MeshBasicMaterial, Quaternion, Vector3 } from "./three.js";
+import { BoxGeometry, CircleGeometry, Color, ConeGeometry, CylinderGeometry, Group, IcosahedronGeometry, MathUtils, Mesh, MeshBasicMaterial, Quaternion, Vector3 } from "../core/three.js";
 
 var Qd = {
   style: `biplane`,

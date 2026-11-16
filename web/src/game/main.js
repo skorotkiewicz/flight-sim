@@ -1,23 +1,23 @@
-import { SoundEngine } from "./audio.js";
-import { Assist } from "./clock.js";
-import { CameraRig, Wm } from "./clouds.js";
-import { Vf, Yf } from "./contrails.js";
-import { DesktopInput, PwaManager } from "./controls.js";
-import { Bu, FLAP_LABELS, Hu, Uu, Wu, hu, mu } from "./flight.js";
-import { Hangar } from "./hangarui.js";
-import { Hud } from "./hud.js";
-import { TouchInput, cu, isHandheld, lu } from "./input.js";
-import { loadModule } from "./loader.js";
-import { SettingsPanel } from "./menus.js";
-import { Rd, Vd } from "./meshkit.js";
-import { Ch, bh, dh, fh, lh, mh, ph, wh } from "./mission.js";
-import { Zd } from "./particles.js";
-import { Cf, PLANE_MODELS, Rf, df, mf, uf, xf } from "./planemodels.js";
-import { tp } from "./postfx.js";
-import { Water, ip, rp } from "./sky.js";
-import { Cd, randomSeed, vd, xd, yd } from "./storage.js";
-import { DirectionalLight, Fog, HemisphereLight, MathUtils, PerspectiveCamera, SRGBColorSpace, Scene, Vector3, WebGLRenderer } from "./three.js";
-import { rm } from "./worldmap.js";
+import { SoundEngine } from "./app/audio.js";
+import { Assist } from "./flight/clock.js";
+import { CameraRig, Wm } from "./world/clouds.js";
+import { Vf, Yf } from "./plane/contrails.js";
+import { DesktopInput, PwaManager } from "./flight/controls.js";
+import { Bu, FLAP_LABELS, Hu, Uu, Wu, hu, mu } from "./flight/flight.js";
+import { Hangar } from "./ui/hangarui.js";
+import { Hud } from "./ui/hud.js";
+import { TouchInput, cu, isHandheld, lu } from "./flight/input.js";
+import { loadModule } from "./app/loader.js";
+import { SettingsPanel } from "./ui/menus.js";
+import { Rd, Vd } from "./plane/meshkit.js";
+import { Ch, bh, dh, fh, lh, mh, ph, wh } from "./world/mission.js";
+import { Zd } from "./plane/particles.js";
+import { Cf, PLANE_MODELS, Rf, df, mf, uf, xf } from "./plane/planemodels.js";
+import { tp } from "./core/postfx.js";
+import { Water, ip, rp } from "./world/sky.js";
+import { Cd, randomSeed, vd, xd, yd } from "./app/storage.js";
+import { DirectionalLight, Fog, HemisphereLight, MathUtils, PerspectiveCamera, SRGBColorSpace, Scene, Vector3, WebGLRenderer } from "./core/three.js";
+import { rm } from "./ui/worldmap.js";
 
 var jh = {
   mobile: {
@@ -1232,7 +1232,14 @@ var Game = class {
   async setupDebug() {
     let {
       default: e
-    } = await loadModule(async () => ({ default: (await import(`lil-gui`)).default }), []);
+    } = await loadModule(async () => {
+      let {
+        default: e
+      } = await import(`lil-gui`);
+      return {
+        default: e
+      };
+    }, []);
     let t = new e({
       title: `Flight model (live)`
     });

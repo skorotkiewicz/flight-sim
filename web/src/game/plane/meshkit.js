@@ -1,5 +1,5 @@
-import { wd } from "./storage.js";
-import { BoxGeometry, BufferAttribute, Color, DataTexture, Euler, Matrix4, Mesh, MeshToonMaterial, NearestFilter, Quaternion, RGBAFormat, ShaderMaterial, UniformsLib, UniformsUtils, Vector3 } from "./three.js";
+import { wd } from "../app/storage.js";
+import { BoxGeometry, BufferAttribute, Color, DataTexture, Euler, Matrix4, Mesh, MeshToonMaterial, NearestFilter, Quaternion, RGBAFormat, ShaderMaterial, UniformsLib, UniformsUtils, Vector3 } from "../core/three.js";
 
 var Ed = new Color();
 var Dd = new Matrix4();

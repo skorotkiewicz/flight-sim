@@ -1,4 +1,4 @@
-import { gf, mf } from "./planemodels.js";
+import { gf, mf } from "../plane/planemodels.js";
 
 var pp = `#2b1d1a`;
 var mp = `"Baloo 2", "Trebuchet MS", sans-serif`;

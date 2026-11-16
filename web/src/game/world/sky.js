@@ -1,5 +1,5 @@
-import { PLANE_STYLES, ef, tf } from "./planemodels.js";
-import { Color, MathUtils, Mesh, PlaneGeometry, ShaderMaterial, SphereGeometry, UniformsLib, UniformsUtils, Vector3 } from "./three.js";
+import { PLANE_STYLES, ef, tf } from "../plane/planemodels.js";
+import { Color, MathUtils, Mesh, PlaneGeometry, ShaderMaterial, SphereGeometry, UniformsLib, UniformsUtils, Vector3 } from "../core/three.js";
 
 var np = [{
   name: `Morning`,

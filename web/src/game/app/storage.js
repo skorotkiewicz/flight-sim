@@ -1,5 +1,5 @@
-import { fd } from "./clock.js";
-import { BufferAttribute, BufferGeometry } from "./three.js";
+import { fd } from "../flight/clock.js";
+import { BufferAttribute, BufferGeometry } from "../core/three.js";
 
 var BEST_STORAGE_KEY = `baron.best.v1`;
 function randomSeed() {

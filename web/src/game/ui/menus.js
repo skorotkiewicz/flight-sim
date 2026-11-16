@@ -1,4 +1,4 @@
-import { Sd, randomSeed, xd, yd } from "./storage.js";
+import { Sd, randomSeed, xd, yd } from "../app/storage.js";
 
 var $ = e => document.getElementById(e);
 var MEDALS = [`🎈`, `🥉`, `🥈`, `🥇`];

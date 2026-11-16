@@ -1,6 +1,6 @@
-import { Md, Nd, Rd, Vd, makeMesh } from "./meshkit.js";
+import { Md, Nd, Rd, Vd, makeMesh } from "../plane/meshkit.js";
 import { SimplexNoise, am, im } from "./noise.js";
-import { BoxGeometry, ConeGeometry, CylinderGeometry, Group, IcosahedronGeometry, InstancedMesh, Matrix4, Object3D, Quaternion, Vector3 } from "./three.js";
+import { BoxGeometry, ConeGeometry, CylinderGeometry, Group, IcosahedronGeometry, InstancedMesh, Matrix4, Object3D, Quaternion, Vector3 } from "../core/three.js";
 
 var Mm = 200;
 var Nm = 260;

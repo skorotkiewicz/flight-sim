@@ -25,36 +25,65 @@ shadowed single-letter locals are safe).
 
 ## Modules (in bundle/dependency order)
 
+All game code lives in `web/src/game/`, grouped:
+
+**`core/`** — rendering infrastructure
+
 | module | role |
 |---|---|
 | three.js | re-export shim of the npm `three` package (r187); the embedded three r170 body was dropped |
-| audio.js | SoundEngine (WebAudio bus, fanfare/sfx) |
-| input.js | touch/handheld detection, TouchInput |
+| postfx.js | FXAA + render-target composer |
+
+**`flight/`** — flying the plane
+
+| module | role |
+|---|---|
 | flight.js | aircraft spec, flap data, flight-model math |
+| input.js | touch/handheld detection, TouchInput |
 | controls.js | DesktopInput (keyboard/mouse/gamepad), PwaManager |
 | clock.js | Assist (arcade assist), fixed-step clock |
-| storage.js | localStorage save/load (`baron.best.v1`, `baron.settings.v1`) |
+
+**`plane/`** — the aircraft and its effects
+
+| module | role |
+|---|---|
 | meshkit.js | makeMesh + material/gradient/texture helpers |
-| particles.js | ParticleSystem (dust/smoke) |
 | planemodels.js | plane styles (biplane/hard/sunflower), part builders |
 | contrails.js | wingtip contrail meshes + shader |
-| postfx.js | FXAA + render-target composer |
-| sky.js | sun/lighting presets (Morning, Water, …) |
-| hangarui.js | Hangar customization UI |
-| instruments.js | canvas gauges (ASI, alt…) |
-| hud.js | HUD overlays (arrows, badges) |
-| menus.js | SettingsPanel (pause menu) |
-| worldmap.js | route-map drawing |
+| particles.js | ParticleSystem (dust/smoke) |
+
+**`world/`** — the world you fly over
+
+| module | role |
+|---|---|
 | noise.js | simplex noise (copy of the worker's) |
 | terrain.js | Terrain (biomes, height field) |
 | props.js | scatter props |
 | destinations.js | settlements/POIs |
 | clouds.js | clouds + CameraRig |
+| sky.js | sun/lighting presets (Morning, Water, …) |
 | mission.js | cross-country route/mission logic |
-| sw.js | service-worker URL helpers |
+
+**`ui/`** — screens and overlays
+
+| module | role |
+|---|---|
+| hud.js | HUD overlays (arrows, badges) |
+| instruments.js | canvas gauges (ASI, alt…) |
+| menus.js | SettingsPanel (pause menu) |
+| hangarui.js | Hangar customization UI |
+| worldmap.js | route-map drawing |
+
+**`app/`** — global services
+
+| module | role |
+|---|---|
+| audio.js | SoundEngine (WebAudio bus, fanfare/sfx) |
+| storage.js | localStorage save/load (`baron.best.v1`, `baron.settings.v1`) |
 | loader.js | loadModule (dynamic import + progress) |
-| main.js | Game class + bootstrap (`window.baron` hook is in Game.setupDebug) |
-| lil-gui | debug GUI for `Game.setupDebug`, npm dependency, loaded via dynamic import (own chunk) |
+| sw.js | service-worker URL helpers |
+
+**`game/main.js`** — Game class + bootstrap (`window.baron` hook is in `Game.setupDebug`); entry stub `src/main.js` imports it. lil-gui (npm dep, own chunk) is loaded by `Game.setupDebug`.
 
 ## Variable-name map
 

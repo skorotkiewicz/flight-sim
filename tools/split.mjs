@@ -101,20 +101,41 @@ for (const mod of modules)
       if (idx[owner] > idx[mod.name]) fwd.push(`${mod.name} -> ${owner} (${n})`);
 console.log(`forward references: ${fwd.length ? "\n" + fwd.join("\n") : "none"}`);
 
+const dirs = {
+  three: "core", postfx: "core",
+  flight: "flight", controls: "flight", clock: "flight", input: "flight",
+  meshkit: "plane", planemodels: "plane", contrails: "plane", particles: "plane",
+  noise: "world", terrain: "world", props: "world", destinations: "world",
+  clouds: "world", sky: "world", mission: "world",
+  hud: "ui", instruments: "ui", menus: "ui", hangarui: "ui", worldmap: "ui",
+  storage: "app", loader: "app", sw: "app", audio: "app",
+};
+const outPath = (name) => (dirs[name] ? `${dirs[name]}/` : "") + `${name}.js`;
+const importPath = (fromName, toName) => {
+  if (fromName === toName) return `./${toName}.js`;
+  const rel = path.posix.relative(path.dirname(outPath(fromName)), outPath(toName));
+  return rel.startsWith(".") ? rel : `./${rel}`;
+};
+
 // emit
 fs.mkdirSync(outDir, { recursive: true });
 for (const mod of modules) {
+  if (mod.name === "preload") continue; // Vite provides its own modulepreload polyfill
   let out = "";
   for (const [from, names] of [...mod.imports].sort()) {
     if (from === "three") names.forEach((n) => fromThree.add(n));
-    out += `import { ${[...names].sort().join(", ")} } from "./${from}.js";\n`;
+    out += `import { ${[...names].sort().join(", ")} } from "${importPath(mod.name, from)}";\n`;
   }
   if (out) out += "\n";
   if (mod.name === "three") continue; // shim emitted below
-  out += generate(mod.ast, { jsescOption: { minimal: true } }).code;
+  let body = generate(mod.ast, { jsescOption: { minimal: true } }).code;
+  if (mod.name === "main") body = body.replaceAll("./lil-gui.esm-BzjtZe8o.js", "lil-gui"); // dynamic import -> npm dep
+  out += body;
   const defs = [...mod.defines].sort();
   out += defs.length ? `\n\nexport { ${defs.join(", ")} };\n` : "\n";
-  fs.writeFileSync(path.join(outDir, `${mod.name}.js`), out);
+  const outFile = path.join(outDir, outPath(mod.name));
+  fs.mkdirSync(path.dirname(outFile), { recursive: true });
+  fs.writeFileSync(outFile, out);
   console.log(`${mod.name}.js (${(out.length / 1024).toFixed(0)}K) <- ${[...mod.imports.keys()].join(" ") || "-"} | exports ${defs.length}`);
 }
 
@@ -122,6 +143,8 @@ for (const mod of modules) {
 const missing = [...fromThree].filter((n) => !vendorExports.has(n));
 if (missing.length) console.log(`NOT exported by vendor three.js: ${missing.join(", ")}`);
 const shim = `// re-export of the real three.js; names referenced by the game modules\nexport {\n${[...fromThree].sort().map((n) => `  ${n},`).join("\n")}\n} from "three";\n`;
-fs.writeFileSync(path.join(outDir, "three.js"), shim);
+const shimPath = path.join(outDir, outPath("three"));
+fs.mkdirSync(path.dirname(shimPath), { recursive: true });
+fs.writeFileSync(shimPath, shim);
 console.log(`three.js shim (${fromThree.size} names, ${missing.length} missing)`);
 console.log(`done: ${modules.length - 1} modules + shim -> ${outDir}`);

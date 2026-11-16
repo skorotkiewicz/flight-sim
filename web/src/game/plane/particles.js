@@ -1,5 +1,5 @@
 import { Md, Rd, Vd } from "./meshkit.js";
-import { CanvasTexture, Color, Group, IcosahedronGeometry, InstancedMesh, MathUtils, Matrix4, MeshBasicMaterial, Object3D, OctahedronGeometry, Quaternion, SRGBColorSpace, Sprite, SpriteMaterial, Vector3 } from "./three.js";
+import { CanvasTexture, Color, Group, IcosahedronGeometry, InstancedMesh, MathUtils, Matrix4, MeshBasicMaterial, Object3D, OctahedronGeometry, Quaternion, SRGBColorSpace, Sprite, SpriteMaterial, Vector3 } from "../core/three.js";
 
 var Hd = 1800;
 var Ud = 500;

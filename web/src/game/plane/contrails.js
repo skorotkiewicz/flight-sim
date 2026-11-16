@@ -1,4 +1,4 @@
-import { Color, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, ShaderMaterial, Shape, ShapeGeometry, Vector3 } from "./three.js";
+import { Color, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, ShaderMaterial, Shape, ShapeGeometry, Vector3 } from "../core/three.js";
 
 var zf = new Vector3();
 var Bf = new Vector3();

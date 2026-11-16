@@ -1,7 +1,7 @@
-import { FLAP_LABELS, FLAP_POSITIONS } from "./flight.js";
+import { FLAP_LABELS, FLAP_POSITIONS } from "../flight/flight.js";
 import { Fp } from "./instruments.js";
-import { df } from "./planemodels.js";
-import { MathUtils, Vector2, Vector3 } from "./three.js";
+import { df } from "../plane/planemodels.js";
+import { MathUtils, Vector2, Vector3 } from "../core/three.js";
 
 var Q = `#2b1d1a`;
 var Lp = `#fff6dd`;
