@@ -1,9 +1,10 @@
 import {
 	getBestScore,
-	randomSeed,
 	getScoreStorageKey,
+	randomSeed,
 	saveSettings,
 } from "../app/storage.js";
+
 var getMenuElement = (e) => document.getElementById(e);
 var MEDALS = [`🎈`, `🥉`, `🥈`, `🥇`];
 var SettingsPanel = class {
@@ -91,6 +92,13 @@ var SettingsPanel = class {
 		i.addEventListener(`change`, () => {
 			e.cameraShake = i.checked;
 			saveSettings(e);
+		});
+		let atc = getMenuElement(`atc-enabled`);
+		atc.checked = e.atcEnabled === true;
+		atc.addEventListener(`change`, () => {
+			e.atcEnabled = atc.checked;
+			saveSettings(e);
+			t.atcChanged?.();
 		});
 		let a = getMenuElement(`tilt`);
 		let o = getMenuElement(`tilt-note`);
@@ -240,4 +248,5 @@ var SettingsPanel = class {
 		getMenuElement(`hurt`).style.opacity = String(e);
 	}
 };
+
 export { getMenuElement, MEDALS, SettingsPanel };

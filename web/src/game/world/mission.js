@@ -245,6 +245,303 @@ function planFlightRoute(e, t, n, r, i = 700) {
 	return l.r;
 }
 var ROUTE_TAILWIND_PENALTY = 1800;
+// Clear only terrain-feasible candidates, preferring the fewest reciprocal ends.
+function planAtcFlightRoute(terrain, from, to, wind, turnRadius = 700) {
+	const departure = chooseUpwindRunwayDirection(from, wind);
+	const arrival = chooseUpwindRunwayDirection(to, wind);
+	const opposite = ({ dx, dz }) => ({ dx: -dx, dz: -dz });
+	const assignments = [
+		[[departure, arrival]],
+		[
+			[departure, opposite(arrival)],
+			[opposite(departure), arrival],
+		],
+		[[opposite(departure), opposite(arrival)]],
+	];
+	for (const group of assignments) {
+		let best = null;
+		for (const [depart, land] of group) {
+			for (const extension of [ROUTE_DEPARTURE_EXTENSION, 300]) {
+				const { r: route } = buildRouteCandidate(
+					terrain,
+					from,
+					to,
+					depart,
+					land,
+					extension,
+					turnRadius,
+				);
+				if (
+					route.climb <= 0.1 &&
+					route.glide <= 0.1 &&
+					(!best || route.length < best.length)
+				)
+					best = route;
+			}
+		}
+		if (best) return best;
+	}
+	return null;
+}
+
+function planAtcArrivalRoute(
+	terrain,
+	position,
+	forward,
+	target,
+	wind,
+	turnRadius = 700,
+) {
+	const upwind = chooseUpwindRunwayDirection(target, wind);
+	for (const land of [upwind, { dx: -upwind.dx, dz: -upwind.dz }]) {
+		const route = buildAtcArrivalCandidate(
+			terrain,
+			position,
+			forward,
+			target,
+			land,
+			turnRadius,
+		);
+		if (route) return route;
+	}
+	return null;
+}
+
+function planAtcDepartureRoute(terrain, airport, wind, turnRadius = 700) {
+	const upwind = chooseUpwindRunwayDirection(airport, wind);
+	for (const depart of [upwind, { dx: -upwind.dx, dz: -upwind.dz }]) {
+		const start = {
+			x: airport.x - depart.dx * (airport.paved / 2 - 20),
+			z: airport.z - depart.dz * (airport.paved / 2 - 20),
+		};
+		const runwayY = airport.height + ROUTE_RUNWAY_ALTITUDE_OFFSET;
+		const runwayEnd = airport.paved - 20;
+		const length = runwayEnd + 3000;
+		const count = Math.ceil(length / ROUTE_SAMPLE_SPACING);
+		const points = [];
+		let feasible = true;
+		for (let index = 0; index <= count; index++) {
+			const s = Math.min(length, index * ROUTE_SAMPLE_SPACING);
+			points.push({
+				x: start.x + depart.dx * s,
+				z: start.z + depart.dz * s,
+				s,
+			});
+		}
+		// Include liftoff exactly even when the usual sample spacing misses it.
+		points.push({
+			x: start.x + depart.dx * ROUTE_LIFTOFF_DISTANCE,
+			z: start.z + depart.dz * ROUTE_LIFTOFF_DISTANCE,
+			s: ROUTE_LIFTOFF_DISTANCE,
+		});
+		points.sort((a, b) => a.s - b.s);
+		for (const point of points) {
+			const ceiling =
+				runwayY + Math.max(0, point.s - ROUTE_LIFTOFF_DISTANCE) * 0.1;
+			let ground = Math.max(0, terrain.height(point.x, point.z));
+			if (point.s > runwayEnd) {
+				for (const offset of [-200, -100, 100, 200])
+					ground = Math.max(
+						ground,
+						terrain.height(
+							point.x - depart.dz * offset,
+							point.z + depart.dx * offset,
+						),
+					);
+			}
+			const clearance = Math.min(
+				ROUTE_MINIMUM_CLEARANCE_CAP,
+				Math.max(0, point.s - runwayEnd) * 0.048,
+			);
+			if (ground + clearance > ceiling + 1e-8) {
+				feasible = false;
+				break;
+			}
+			// Climb steadily into a terrain-safe outbound segment, without a fake landing.
+			point.y = ceiling;
+		}
+		if (!feasible) continue;
+		const end = points.at(-1);
+		return {
+			from: airport,
+			to: { x: end.x, z: end.z, height: end.y },
+			pts: points,
+			length,
+			depart,
+			land: depart,
+			sLift: ROUTE_LIFTOFF_DISTANCE,
+			sAim: length,
+			sFinal: runwayEnd,
+			turnRadius,
+			maxAlt: end.y,
+			climb: 0.1,
+			glide: 0,
+			departureOnly: true,
+		};
+	}
+	return null;
+}
+
+function buildAtcArrivalCandidate(
+	terrain,
+	position,
+	forward,
+	target,
+	land,
+	turnRadius,
+) {
+	if (
+		![position.x, position.y, position.z, forward.x, forward.z].every(
+			Number.isFinite,
+		) ||
+		Math.hypot(forward.x, forward.z) === 0
+	)
+		return null;
+	const touchdown = {
+		x: target.x - land.dx * (target.paved / 2 - ROUTE_TOUCHDOWN_OFFSET),
+		z: target.z - land.dz * (target.paved / 2 - ROUTE_TOUCHDOWN_OFFSET),
+	};
+	const final = {
+		x: touchdown.x - land.dx * ROUTE_FINAL_APPROACH_LENGTH,
+		z: touchdown.z - land.dz * ROUTE_FINAL_APPROACH_LENGTH,
+		h: Math.atan2(land.dz, land.dx),
+	};
+	const points = [
+		{ x: position.x, z: position.z },
+		...buildDubinsPath(
+			{ x: position.x, z: position.z, h: Math.atan2(forward.z, forward.x) },
+			final,
+			turnRadius,
+		),
+	];
+	const finalIndex = points.length - 1;
+	const appendLine = (start, distance) => {
+		const count = Math.ceil(distance / ROUTE_SAMPLE_SPACING);
+		for (let step = 1; step <= count; step++)
+			points.push({
+				x: start.x + (land.dx * distance * step) / count,
+				z: start.z + (land.dz * distance * step) / count,
+			});
+	};
+	appendLine(final, ROUTE_FINAL_APPROACH_LENGTH);
+	const aimIndex = points.length - 1;
+	appendLine(touchdown, ROUTE_LANDING_ROLLOUT);
+	const distances = [0];
+	for (let index = 1; index < points.length; index++)
+		distances.push(
+			distances[index - 1] +
+				Math.hypot(
+					points[index].x - points[index - 1].x,
+					points[index].z - points[index - 1].z,
+				),
+		);
+	const aim = distances[aimIndex];
+	const endY = target.height + ROUTE_RUNWAY_ALTITUDE_OFFSET;
+	const minimum = [];
+	const preferred = [];
+	for (let index = 0; index < points.length; index++) {
+		const point = points[index];
+		const ground = Math.max(0, terrain.height(point.x, point.z));
+		const remaining = Math.max(0, aim - distances[index]);
+		const clearance = Math.max(
+			0,
+			Math.min(
+				ROUTE_MINIMUM_CLEARANCE_CAP,
+				distances[index] * 0.048,
+				(remaining - ROUTE_TOUCHDOWN_OFFSET) * 0.04,
+			),
+		);
+		minimum.push(ground + clearance);
+		const next = points[Math.min(points.length - 1, index + 1)];
+		const previous = points[Math.max(0, index - 1)];
+		const dx = next.x - previous.x;
+		const dz = next.z - previous.z;
+		const length = Math.hypot(dx, dz) || 1;
+		let corridor = ground;
+		for (const offset of [-200, -100, 100, 200])
+			corridor = Math.max(
+				corridor,
+				terrain.height(
+					point.x - (dz / length) * offset,
+					point.z + (dx / length) * offset,
+				),
+			);
+		preferred.push(
+			Math.max(
+				corridor + ROUTE_PREFERRED_TERRAIN_CLEARANCE,
+				target.height + ROUTE_CRUISE_HEIGHT_OFFSET,
+			),
+		);
+	}
+	minimum[0] = Math.max(minimum[0], position.y);
+	for (let index = aimIndex; index < points.length; index++)
+		minimum[index] = Math.max(minimum[index], endY);
+	// Envelopes enforce a 0.1 slope between every sampled pair, including terrain peaks.
+	const envelope = (values) => {
+		const result = [...values];
+		for (let index = result.length - 2; index >= 0; index--)
+			result[index] = Math.max(
+				result[index],
+				result[index + 1] - 0.1 * (distances[index + 1] - distances[index]),
+			);
+		for (let index = 1; index < result.length; index++)
+			result[index] = Math.max(
+				result[index],
+				result[index - 1] - 0.1 * (distances[index] - distances[index - 1]),
+			);
+		return result;
+	};
+	const floor = envelope(minimum);
+	if (
+		floor[0] > position.y + 1e-8 ||
+		floor[aimIndex] > endY + 1e-8 ||
+		minimum.slice(aimIndex).some((y) => y > endY + 1e-8)
+	)
+		return null;
+	const desired = envelope(preferred);
+	let climb = 0;
+	let glide = 0;
+	for (let index = 0; index < points.length; index++) {
+		const s = distances[index];
+		const y =
+			index >= aimIndex
+				? endY
+				: Math.max(
+						floor[index],
+						Math.min(
+							desired[index],
+							position.y + 0.1 * s,
+							endY + 0.1 * (aim - s),
+						),
+					);
+		points[index] = { ...points[index], y, s };
+		if (index > 0) {
+			const slope = (y - points[index - 1].y) / (s - distances[index - 1] || 1);
+			climb = Math.max(climb, slope);
+			glide = Math.max(glide, -slope);
+		}
+	}
+	// Floating point interpolation at caps can exceed the limit by roundoff only.
+	if (climb > 0.1 + 1e-8 || glide > 0.1 + 1e-8) return null;
+	return {
+		from: position,
+		to: target,
+		pts: points,
+		length: distances.at(-1),
+		depart: {
+			dx: forward.x / Math.hypot(forward.x, forward.z),
+			dz: forward.z / Math.hypot(forward.x, forward.z),
+		},
+		land,
+		sLift: 0,
+		sAim: aim,
+		sFinal: distances[finalIndex],
+		turnRadius,
+		maxAlt: Math.max(...points.map((point) => point.y)),
+		climb: Math.min(climb, 0.1),
+		glide: Math.min(glide, 0.1),
+	};
+}
 function buildRouteCandidate(e, t, n, r, i, a, o) {
 	let s = (t, n) => Math.max(e.height(t, n), 0);
 	let c = [];
@@ -508,33 +805,37 @@ var RouteTracker = class {
 		return this.lateral < 150 && Math.abs(this.vertical) < 70;
 	}
 };
+
 export {
-	ROUTE_SAMPLE_SPACING,
-	sampleRoutePosition,
-	ROUTE_CLIMB_SLOPE,
-	buildRouteCandidate,
-	ROUTE_GLIDE_SLOPE,
-	solveDubinsCandidates,
-	ROUTE_RUNWAY_ALTITUDE_OFFSET,
-	planFlightRoute,
-	ROUTE_CRUISE_HEIGHT_OFFSET,
 	bearingBetweenPoints,
-	ROUTE_LIFTOFF_DISTANCE,
+	buildDubinsPath,
+	buildRouteCandidate,
+	COMPASS_DIRECTION_NAMES,
+	chooseUpwindRunwayDirection,
 	nameAirfields,
 	normalizeRouteAngle,
-	ROUTE_FULL_TURN,
-	ROUTE_LANDING_ROLLOUT,
-	chooseUpwindRunwayDirection,
 	PLANE_ROUTE_CRUISE_SPEEDS,
-	ROUTE_FINAL_APPROACH_LENGTH,
-	ROUTE_PREFERRED_TERRAIN_CLEARANCE,
 	PLANE_ROUTE_TURN_RADII,
-	ROUTE_TOUCHDOWN_OFFSET,
-	ROUTE_MINIMUM_CLEARANCE_CAP,
+	planAtcArrivalRoute,
+	planAtcDepartureRoute,
+	planAtcFlightRoute,
+	planFlightRoute,
+	ROUTE_CLIMB_SLOPE,
+	ROUTE_CRUISE_HEIGHT_OFFSET,
 	ROUTE_DEPARTURE_EXTENSION,
-	COMPASS_DIRECTION_NAMES,
-	sampleDubinsSegments,
-	RouteTracker,
+	ROUTE_FINAL_APPROACH_LENGTH,
+	ROUTE_FULL_TURN,
+	ROUTE_GLIDE_SLOPE,
+	ROUTE_LANDING_ROLLOUT,
+	ROUTE_LIFTOFF_DISTANCE,
+	ROUTE_MINIMUM_CLEARANCE_CAP,
+	ROUTE_PREFERRED_TERRAIN_CLEARANCE,
+	ROUTE_RUNWAY_ALTITUDE_OFFSET,
+	ROUTE_SAMPLE_SPACING,
 	ROUTE_TAILWIND_PENALTY,
-	buildDubinsPath,
+	ROUTE_TOUCHDOWN_OFFSET,
+	RouteTracker,
+	sampleDubinsSegments,
+	sampleRoutePosition,
+	solveDubinsCandidates,
 };

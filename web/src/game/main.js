@@ -1,69 +1,76 @@
 import { SoundEngine } from "./app/audio.js";
-import { Assist } from "./flight/clock.js";
-import { CameraRig, World } from "./world/clouds.js";
-import { getFlightBankAngle, FlightPathGuide } from "./plane/contrails.js";
-import { DesktopInput, PwaManager } from "./flight/controls.js";
-import {
-	getFlapStallAngle,
-	FLAP_LABELS,
-	stepFlight,
-	getGroundRestQuaternion,
-	getGroundRestHeight,
-	DEFAULT_FLIGHT_SPEC,
-	CRASH_SPEED_TOLERANCE,
-} from "./flight/flight.js";
-import { Hangar } from "./ui/hangarui.js";
-import { Hud } from "./ui/hud.js";
-import {
-	TouchInput,
-	readSafeAreaInsets,
-	isHandheld,
-	requestLandscapeFullscreen,
-} from "./flight/input.js";
 import { loadModule } from "./app/loader.js";
-import { SettingsPanel } from "./ui/menus.js";
-import { createOutlineMaterial, createToonMaterial } from "./plane/meshkit.js";
 import {
-	sampleRoutePosition,
-	planFlightRoute,
-	bearingBetweenPoints,
-	nameAirfields,
-	chooseUpwindRunwayDirection,
-	PLANE_ROUTE_CRUISE_SPEEDS,
-	PLANE_ROUTE_TURN_RADII,
-	RouteTracker,
-} from "./world/mission.js";
-import { FlightEffects } from "./plane/particles.js";
-import {
-	formatPlaneLoadout,
-	PLANE_MODELS,
-	Aircraft,
-	getPlaneEngineKind,
-	estimateStallSpeed,
-	buildFlightSpec,
-	loadPlaneLoadout,
-} from "./plane/planemodels.js";
-import { PostProcessingComposer } from "./core/postfx.js";
-import { Water, Sky, sunDirectionForTime } from "./world/sky.js";
-import {
-	saveBestScore,
-	randomSeed,
-	loadSettings,
 	getScoreStorageKey,
+	loadSettings,
+	randomSeed,
+	saveBestScore,
 	saveSettings,
 } from "./app/storage.js";
+import { PostProcessingComposer } from "./core/postfx.js";
 import {
 	DirectionalLight,
 	Fog,
 	HemisphereLight,
 	MathUtils,
 	PerspectiveCamera,
-	SRGBColorSpace,
 	Scene,
+	SRGBColorSpace,
 	Vector3,
 	WebGLRenderer,
 } from "./core/three.js";
+import { AtcController } from "./flight/atc.js";
+import { Assist } from "./flight/clock.js";
+import { DesktopInput, PwaManager } from "./flight/controls.js";
+import {
+	CRASH_SPEED_TOLERANCE,
+	DEFAULT_FLIGHT_SPEC,
+	FLAP_LABELS,
+	getFlapStallAngle,
+	getGroundRestHeight,
+	getGroundRestQuaternion,
+	stepFlight,
+} from "./flight/flight.js";
+import {
+	isHandheld,
+	readSafeAreaInsets,
+	requestLandscapeFullscreen,
+	TouchInput,
+} from "./flight/input.js";
+import { FlightPathGuide, getFlightBankAngle } from "./plane/contrails.js";
+import { createOutlineMaterial, createToonMaterial } from "./plane/meshkit.js";
+import { FlightEffects } from "./plane/particles.js";
+import {
+	Aircraft,
+	buildFlightSpec,
+	estimateStallSpeed,
+	formatPlaneLoadout,
+	getPlaneEngineKind,
+	loadPlaneLoadout,
+	PLANE_MODELS,
+} from "./plane/planemodels.js";
+import { Hangar } from "./ui/hangarui.js";
+import { Hud } from "./ui/hud.js";
+import { SettingsPanel } from "./ui/menus.js";
+import { RadioPanel } from "./ui/radio.js";
 import { drawRouteMap } from "./ui/worldmap.js";
+import { CameraRig, World } from "./world/clouds.js";
+import {
+	bearingBetweenPoints,
+	chooseUpwindRunwayDirection,
+	nameAirfields,
+	PLANE_ROUTE_CRUISE_SPEEDS,
+	PLANE_ROUTE_TURN_RADII,
+	planAtcArrivalRoute,
+	planAtcDepartureRoute,
+	planAtcFlightRoute,
+	planFlightRoute,
+	RouteTracker,
+	sampleRoutePosition,
+} from "./world/mission.js";
+import { Sky, sunDirectionForTime, Water } from "./world/sky.js";
+import { TaxiGuide } from "./world/taxi-guide.js";
+
 var RENDER_QUALITY_PRESETS = {
 	mobile: {
 		radius: 3,
@@ -151,6 +158,11 @@ var Game = class {
 	sortieRoute = null;
 	guide = null;
 	tracker = null;
+	guideRoute = null;
+	atc = null;
+	atcDeparturePlan = null;
+	radio = null;
+	taxiGuide = new TaxiGuide();
 	names = [];
 	rejoin = new Vector3();
 	contextLost = false;
@@ -193,10 +205,21 @@ var Game = class {
 			qualityChanged: () => this.applyTier(),
 			volumeChanged: (e) => this.audio.setVolume(e),
 			modeChanged: () => this.refreshRoute(),
+			atcChanged: () => this.refreshRoute(),
 			destStep: (e) => this.stepDest(e),
 			click: () => this.uiClick(),
 			tiltChanged: (e) => this.input.touch.setTilt(e),
 			recentre: () => this.input.touch.recentre(),
+		});
+		this.radio = new RadioPanel({
+			onAction: (id) => {
+				if (this.state !== `sortie` || this.paused || !this.atc) return;
+				if (this.atc.act(id)) {
+					this.audio.click();
+					this.renderAtc();
+				}
+			},
+			onToggle: () => this.input.releaseControls(),
 		});
 		let r = 0;
 		let i = ``;
@@ -235,6 +258,7 @@ var Game = class {
 			this.sun,
 			this.sun.target,
 			this.fx.group,
+			this.taxiGuide.group,
 		);
 		this.sun.castShadow = true;
 		let a = this.sun.shadow.camera;
@@ -434,6 +458,10 @@ var Game = class {
 			return;
 		}
 		let t = this.settings;
+		document.getElementById(`fly-btn`).disabled = false;
+		this.atcDeparturePlan = null;
+		document.getElementById(`atc-note`).textContent =
+			`Start parked. Request and read back taxi, takeoff and landing clearances.`;
 		let n = e.gen.airfields;
 		this.names = nameAirfields(n);
 		if (t.dest < 1 || t.dest >= n.length) {
@@ -443,10 +471,23 @@ var Game = class {
 		this.ui.refreshBest();
 		if (t.mode !== `route`) {
 			this.route = null;
+			if (t.atcEnabled) {
+				this.atcDeparturePlan = planAtcDepartureRoute(
+					e.gen,
+					e.home,
+					e.baseWind,
+					PLANE_ROUTE_TURN_RADII[this.loadout.style],
+				);
+				if (!this.atcDeparturePlan) {
+					document.getElementById(`fly-btn`).disabled = true;
+					document.getElementById(`atc-note`).textContent =
+						`ATC cannot offer a terrain-safe departure here. Try another world seed or disable ATC.`;
+				}
+			}
 			return;
 		}
 		let r = n[t.dest];
-		let i = planFlightRoute(
+		let i = (t.atcEnabled ? planAtcFlightRoute : planFlightRoute)(
 			e.gen,
 			e.home,
 			r,
@@ -454,6 +495,16 @@ var Game = class {
 			PLANE_ROUTE_TURN_RADII[this.loadout.style],
 		);
 		this.route = i;
+		if (!i) {
+			document.getElementById(`fly-btn`).disabled = true;
+			const canvas = this.ui.routeCanvas;
+			canvas.getContext(`2d`).clearRect(0, 0, canvas.width, canvas.height);
+			this.ui.setRouteInfo(
+				this.names[t.dest],
+				`ATC cannot clear a terrain-safe route. Choose another destination or disable ATC.`,
+			);
+			return;
+		}
 		this.drawMap();
 		let a = (i.sAim / 1000).toFixed(1);
 		let o = Math.max(
@@ -493,13 +544,63 @@ var Game = class {
 		this.refreshRoute();
 	}
 	clearGuide() {
+		this.setPathGuide(null);
+		this.sortieRoute = null;
+	}
+	setPathGuide(route) {
+		if (route === this.guideRoute) return;
 		if (this.guide) {
 			this.scene.remove(this.guide.mesh);
 			this.guide.dispose();
 		}
 		this.guide = null;
 		this.tracker = null;
-		this.sortieRoute = null;
+		this.guideRoute = route;
+		if (route) {
+			this.guide = new FlightPathGuide(route);
+			this.scene.add(this.guide.mesh);
+			this.tracker = new RouteTracker(route);
+		}
+	}
+	clearAtc() {
+		this.atc = null;
+		this.radio?.render(null);
+		this.taxiGuide.clear();
+	}
+	atcObservation() {
+		const state = this.player.s;
+		this.player.forward(gamePositionScratch);
+		return {
+			pos: { x: state.pos.x, y: state.pos.y, z: state.pos.z },
+			forward: { x: gamePositionScratch.x, z: gamePositionScratch.z },
+			speed: Math.hypot(state.vel.x, state.vel.z),
+			onGround: state.onGround,
+			airTime: state.airTime,
+			groundTime: state.groundTime,
+			groundHeight: Math.max(
+				this.world.groundHeight(state.pos.x, state.pos.z),
+				0,
+			),
+			alive: this.player.alive,
+		};
+	}
+	renderAtc() {
+		const visible =
+			this.state === `sortie` && !!this.atc && !!this.player?.alive;
+		const snapshot = this.atc?.snapshot();
+		this.radio.render(snapshot, { visible, paused: this.paused });
+		if (!visible || this.paused) {
+			this.taxiGuide.group.visible = false;
+			return;
+		}
+		this.taxiGuide.group.visible = true;
+		this.taxiGuide.update(snapshot.guide, (x, z) =>
+			this.world.groundHeight(x, z),
+		);
+		if (snapshot.arrivalRoute !== this.guideRoute) {
+			this.setPathGuide(snapshot.arrivalRoute);
+		}
+		if (this.guide) this.guide.mesh.visible = !snapshot.guide;
 	}
 	openHangar() {
 		if (this.state === `title`) {
@@ -603,6 +704,7 @@ var Game = class {
 		this.camera.clearViewOffset();
 	}
 	clearPlanes() {
+		this.clearAtc();
 		for (let e of this.planes) {
 			this.scene.remove(e.visual.root);
 			e.visual.dispose();
@@ -654,6 +756,7 @@ var Game = class {
 	setPaused(e) {
 		if (!e || this.state === `sortie` || this.state === `ending`) {
 			this.paused = e;
+			this.input.releaseControls();
 			if (e) {
 				this.audio.suspend();
 				if (!this.contextLost) {
@@ -671,7 +774,25 @@ var Game = class {
 	}
 	startSortie() {
 		let e = this.world;
+		if (this.settings.mode === `route` || this.settings.atcEnabled) {
+			this.refreshRoute();
+			if (
+				(this.settings.mode === `route` && !this.route) ||
+				(this.settings.atcEnabled &&
+					this.settings.mode !== `route` &&
+					!this.atcDeparturePlan)
+			) {
+				this.toTitle();
+				this.ui.hint(
+					`ATC cannot clear this flight. Choose another destination or world seed, or disable ATC.`,
+					6000,
+				);
+				return;
+			}
+		}
 		this.setPaused(false);
+		document.activeElement?.blur?.();
+		this.input.releaseControls();
 		this.clearPlanes();
 		this.clearPreview();
 		this.input.invertPitch = this.settings.invertPitch;
@@ -704,9 +825,26 @@ var Game = class {
 			}
 			let e = this.route;
 			this.sortieRoute = e;
-			this.guide = new FlightPathGuide(e);
-			this.scene.add(this.guide.mesh);
-			this.tracker = new RouteTracker(e);
+			this.setPathGuide(e);
+		}
+		if (this.settings.atcEnabled) {
+			this.atc = new AtcController({
+				airfields: e.gen.airfields,
+				names: this.names,
+				wind: e.baseWind,
+				departure: r,
+				departureRoute: this.sortieRoute,
+				departurePlan: this.atcDeparturePlan,
+				arrivalProvider: (airport, observation) =>
+					planAtcArrivalRoute(
+						e.gen,
+						observation.pos,
+						observation.forward,
+						airport,
+						e.baseWind,
+						PLANE_ROUTE_TURN_RADII[this.loadout.style],
+					),
+			});
 		}
 		let { dx: i, dz: a } = this.sortieRoute
 			? this.sortieRoute.depart
@@ -714,6 +852,13 @@ var Game = class {
 		let o = r.paved / 2 - 20;
 		let s = r.x - i * o;
 		let c = r.z - a * o;
+		if (this.atc) {
+			const layout = this.atc.departureLayout;
+			s = layout.parking.x;
+			c = layout.parking.z;
+			i = layout.parkingHeading.dx;
+			a = layout.parkingHeading.dz;
+		}
 		t.s.quat.copy(getGroundRestQuaternion(i, a, t.gear));
 		t.s.pos.set(
 			s,
@@ -763,6 +908,15 @@ var Game = class {
 		this.ui.show(`none`);
 		this.wakeLock.set(true);
 		this.input.touch.recentre();
+		if (this.atc) {
+			this.atc.update(0, this.atcObservation());
+			this.renderAtc();
+			this.ui.hint(
+				`Parked at Home Field. Request taxi in the radio and read back your clearance. Follow the yellow taxi marks; use gentle throttle and brakes.`,
+				6500,
+			);
+			return;
+		}
 		let e =
 			this.loadout.style === `jet`
 				? ` The jet takes a few seconds to spool up.`
@@ -816,6 +970,7 @@ var Game = class {
 	endSortie(e, t) {
 		let n = this.mission;
 		if (this.state !== `ending`) {
+			this.clearAtc();
 			this.state = `ending`;
 			n.endT = e;
 			n.wreckAt = t;
@@ -868,6 +1023,7 @@ var Game = class {
 		this.endSortie(2.5, null);
 	}
 	showDebrief() {
+		this.clearAtc();
 		let e = this.mission;
 		let t = this.player;
 		this.state = `debrief`;
@@ -1031,6 +1187,7 @@ var Game = class {
 		if (this.state === `sortie` && n.alive) {
 			this.input.sample(e, n.input);
 			this.assist(n);
+			if (this.atc?.snapshot().brakeHeld) n.input.brake = true;
 		} else if (n.downed) {
 			this.downedControls(n);
 		} else {
@@ -1085,6 +1242,7 @@ var Game = class {
 			}
 		}
 		if (this.state === `sortie` && n.alive) {
+			this.atc?.update(e, this.atcObservation());
 			let i = n.s.pos.y - Math.max(t.groundHeight(n.s.pos.x, n.s.pos.z), 0);
 			if (r.hintStage === 0 && n.s.onGround && n.s.airspeed > 14) {
 				r.hintStage = 1;
@@ -1162,7 +1320,11 @@ var Game = class {
 			}
 			if (r.tookOff && n.s.onGround && n.s.vel.length() < 2.5) {
 				r.stoppedT += e;
-				if (r.stoppedT > 1.2) {
+				const radio = this.atc?.snapshot();
+				if (
+					r.stoppedT > 1.2 &&
+					(!radio?.deferLanding || radio.finishRequested)
+				) {
 					this.finishLanding();
 				}
 			} else {
@@ -1193,6 +1355,7 @@ var Game = class {
 				}
 			}
 			if (this.state === `sortie`) {
+				if (this.atc && e.wasPressed(`KeyT`)) this.radio.toggle();
 				let n =
 					(e.wasPressed(`KeyF`) || e.padWasPressed(13) || t.has(`flapsMore`)
 						? 1
@@ -1266,6 +1429,7 @@ var Game = class {
 		}
 	}
 	objectiveText() {
+		if (this.atc) return this.atc.snapshot().objective;
 		let e = this.mission;
 		let t = this.tracker;
 		if (this.sortieRoute && t) {
@@ -1300,6 +1464,7 @@ var Game = class {
 		this.input.pollPad();
 		this.updateTouch(e);
 		this.handleKeys();
+		this.renderAtc();
 		this.time += e;
 		let n = this.world;
 		if (!n) {
@@ -1523,7 +1688,7 @@ var Game = class {
 		};
 	}
 	hudGuide() {
-		let e = this.sortieRoute;
+		let e = this.guideRoute;
 		let t = this.tracker;
 		if (!e || !t) {
 			return;
@@ -1575,13 +1740,14 @@ if (supportsWebGL2()) {
 	document.getElementById(`title`)?.classList.add(`hidden`);
 	document.getElementById(`nogl`)?.classList.remove(`hidden`);
 }
+
 export {
 	Game,
-	supportsWebGL2,
 	gameCanvas,
 	gamePositionScratch,
 	hangarCameraPositionScratch,
 	hangarCameraTargetScratch,
 	hudCanvas,
 	RENDER_QUALITY_PRESETS,
+	supportsWebGL2,
 };

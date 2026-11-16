@@ -12,6 +12,41 @@ cd web && bun run dev     # dev server
 cd web && bun run build   # production build -> dist/
 ```
 
+## Guided ATC
+
+Enable **guided ATC** on the main menu to start on the airport apron. It works
+with Arcade, Normal, or Expert flying and with free flight or cross-country.
+The option defaults off and is saved for the next flight.
+
+Use the radio panel to request taxi, read back the clearance, and follow the
+yellow ground marks to the holding point. Report ready there, read back the
+separate runway-entry/backtrack clearance, then line up at the assigned runway
+end and request takeoff. A clearance becomes acknowledged only after readback.
+Use gentle throttle for taxiing and the normal brake controls to stop.
+
+Cross-country ATC uses the selected destination. In free flight, request an
+arrival at the airfield named in the radio action. Follow the approach guide,
+request landing when aligned, and read back the clearance. **Go around** cancels
+landing clearance and plans a new approach. After touchdown, vacate toward the
+apron connector and stop, then choose **Finish flight**. A safe runway stop also
+offers that action.
+
+Press **T** to expand or collapse the radio, or use its Radio button. The latest
+instruction remains visible when collapsed. Buttons work with mouse, touch, and
+keyboard focus. Click the flight view to return keyboard control after working
+in the radio. Pausing hides the panel and freezes ATC; restarting creates a new
+session. **Say again** repeats the last controller instruction.
+
+Runway assignments prefer the wind-facing end, with an announced reciprocal
+runway when terrain requires it. ATC declines flights or approaches whose
+planned climb/descent exceeds its terrain-feasibility limit. Choose another
+destination or seed, or turn ATC off, when no departure can be cleared.
+Missing a clearance produces guidance warnings without changing flight physics
+or landing scores. Radio is text-only in this version; speech and manual radio
+tuning are future work.
+
+Run ATC and layout regression tests with `cd web && bun run test`.
+
 To apply `rename-map.json` to the current modules without rebuilding them from
 the original bundle:
 
@@ -33,6 +68,9 @@ To regenerate the modules from the original bundle instead:
 ```
 node tools/split.mjs webcrack-out/deobfuscated.js rename-map.json web/src/game
 ```
+
+Original-bundle reconstruction replaces the current modules, including the
+added ATC integration. Use the rename command on current modules for maintenance.
 
 Pipeline: webcrack (unminify) → split at top-level module boundaries →
 scope-safe rename via `rename-map.json` → import/export wiring via babel

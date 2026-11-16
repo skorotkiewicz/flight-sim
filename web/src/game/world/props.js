@@ -1,5 +1,3 @@
-import { createOutlinedMesh, mergeParts, makeMesh } from "../plane/meshkit.js";
-import { RUNWAY_PAVEMENT_COLOR } from "./terrain.js";
 import {
 	BoxGeometry,
 	BufferAttribute,
@@ -13,6 +11,10 @@ import {
 	SphereGeometry,
 	Vector3,
 } from "../core/three.js";
+import { formatRunwayNumber } from "../flight/airport-layout.js";
+import { createOutlinedMesh, makeMesh, mergeParts } from "../plane/meshkit.js";
+import { RUNWAY_PAVEMENT_COLOR } from "./terrain.js";
+
 var AIRFIELD_APRON_COLOR = 8225161;
 var RUNWAY_MARKING_COLOR = 16052712;
 var RUNWAY_EDGE_LIGHT_COLOR = 16773552;
@@ -40,17 +42,6 @@ var RUNWAY_DIGIT_PATTERNS = [
 	`abcdefg`,
 	`abcdfg`,
 ];
-function formatRunwayNumber(e, t) {
-	let n = (Math.atan2(e, -t) * 180) / Math.PI;
-	if (n < 0) {
-		n += 360;
-	}
-	let r = Math.round(n / 10) % 36;
-	if (r === 0) {
-		r = 36;
-	}
-	return String(r).padStart(2, `0`);
-}
 var AirfieldScene = class {
 	af;
 	group = new Group();
@@ -572,17 +563,18 @@ var TerrainManager = class {
 		this.entries.clear();
 	}
 };
+
 export {
-	terrainLodForDistance,
-	RUNWAY_THRESHOLD_LIGHT_COLOR,
-	RUNWAY_DIGIT_PATTERNS,
-	RUNWAY_DIGIT_SEGMENTS,
-	formatRunwayNumber,
-	RUNWAY_EDGE_LIGHT_COLOR,
-	TerrainManager,
-	PAPI_WHITE_COLOR,
 	AIRFIELD_APRON_COLOR,
 	AirfieldScene,
+	formatRunwayNumber,
 	PAPI_RED_COLOR,
+	PAPI_WHITE_COLOR,
+	RUNWAY_DIGIT_PATTERNS,
+	RUNWAY_DIGIT_SEGMENTS,
+	RUNWAY_EDGE_LIGHT_COLOR,
 	RUNWAY_MARKING_COLOR,
+	RUNWAY_THRESHOLD_LIGHT_COLOR,
+	TerrainManager,
+	terrainLodForDistance,
 };

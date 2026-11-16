@@ -1,5 +1,6 @@
-import { SETTINGS_STORAGE_KEY } from "../flight/clock.js";
 import { BufferAttribute, BufferGeometry } from "../core/three.js";
+import { SETTINGS_STORAGE_KEY } from "../flight/clock.js";
+
 var BEST_STORAGE_KEY = `baron.best.v1`;
 function randomSeed() {
 	return Math.floor(Math.random() * 999999999) + 1;
@@ -12,6 +13,7 @@ function createDefaultSettings() {
 		volume: 0.7,
 		invertPitch: false,
 		cameraShake: true,
+		atcEnabled: false,
 		mode: `free`,
 		dest: 1,
 		tilt: false,
@@ -43,6 +45,7 @@ function loadSettings() {
 			...e,
 			...n,
 		};
+		r.atcEnabled = r.atcEnabled === true;
 		if (r.mode !== `free` && r.mode !== `route`) {
 			r.mode = `free`;
 		}
@@ -275,18 +278,19 @@ function mergeAttributes(e) {
 	}
 	return s;
 }
+
 export {
 	BEST_STORAGE_KEY,
-	saveBestScore,
-	getBestScore,
-	mergeAttributes,
-	writeStorageItem,
-	loadBestScores,
-	readStorageItem,
 	createDefaultSettings,
-	randomSeed,
-	loadSettings,
-	mergeGeometries,
+	getBestScore,
 	getScoreStorageKey,
+	loadBestScores,
+	loadSettings,
+	mergeAttributes,
+	mergeGeometries,
+	randomSeed,
+	readStorageItem,
+	saveBestScore,
 	saveSettings,
+	writeStorageItem,
 };

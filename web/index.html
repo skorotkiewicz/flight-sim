@@ -61,6 +61,10 @@
             <button type="button" id="seed-roll" title="New random world">🎲</button>
           </div>
         </div>
+        <div class="row atc-option">
+          <label for="atc-enabled"><input id="atc-enabled" type="checkbox" aria-describedby="atc-note" /> Enable guided ATC</label>
+          <p id="atc-note" class="atc-note">Start parked. Request and read back taxi, takeoff and landing clearances.</p>
+        </div>
         <div class="row">
           <span class="row-label" id="quality-label">Graphics</span>
           <fieldset class="seg" id="quality-seg" aria-labelledby="quality-label">
@@ -94,6 +98,7 @@
             <tr><td>Camera</td><td>CAM (chase / cockpit)</td></tr>
             <tr><td>Bail out</td><td>Hold BAIL for a second</td></tr>
             <tr><td>Pause</td><td>❚❚ top-left</td></tr>
+            <tr><td>Radio</td><td>Tap Radio for ATC requests and readbacks</td></tr>
             <tr><td>Tilt</td><td>Pause → Steer by tilting</td></tr>
           </table>
           <table class="desktop-only">
@@ -105,6 +110,7 @@
             <tr><td>Brakes</td><td>B</td></tr>
             <tr><td>Camera</td><td>C (chase / cockpit)</td></tr>
             <tr><td>Mouse stick</td><td>M toggles</td></tr>
+            <tr><td>Radio</td><td>T toggles guided ATC requests and readbacks</td></tr>
             <tr><td>Bail out</td><td>X</td></tr>
             <tr><td>Destination</td><td>← / → on the menu (Cross-country)</td></tr>
             <tr><td>Pause / Restart</td><td>Esc or P / R</td></tr>

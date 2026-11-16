@@ -1,11 +1,17 @@
 import {
 	FLAP_POSITIONS,
+	KEYBOARD_AXIS_SLEW_RATE,
 	shapeTouchStickAxis,
 	TouchFlightControls,
-	KEYBOARD_AXIS_SLEW_RATE,
 } from "./flight.js";
 import { isTouchScreen } from "./input.js";
+
 var THROTTLE_CHANGE_RATE = 0.6;
+function isFlightUiTarget(target) {
+	return !!target?.closest?.(
+		"[data-flight-ui], input, textarea, select, button, [contenteditable=true]",
+	);
+}
 var DesktopInput = class {
 	target;
 	keys = new Set();
@@ -30,6 +36,7 @@ var DesktopInput = class {
 	touch;
 	lastInput = isTouchScreen() ? `touch` : `desktop`;
 	onInputKind = null;
+	uiHovered = false;
 	constructor(e) {
 		this.target = e;
 		this.touch = new TouchFlightControls(e);
@@ -38,12 +45,18 @@ var DesktopInput = class {
 			(e) => this.setKind(e.pointerType === `touch` ? `touch` : `desktop`),
 			true,
 		);
-		window.addEventListener(`pointermove`, (e) => {
-			if (e.pointerType === `mouse` && (e.movementX || e.movementY)) {
-				this.setKind(`desktop`);
-			}
-		});
+		window.addEventListener(
+			`pointermove`,
+			(e) => {
+				this.uiHovered = isFlightUiTarget(e.target);
+				if (e.pointerType === `mouse` && (e.movementX || e.movementY)) {
+					this.setKind(`desktop`);
+				}
+			},
+			true,
+		);
 		window.addEventListener(`keydown`, (e) => {
+			if (isFlightUiTarget(e.target)) return;
 			this.setKind(`desktop`);
 			if (!e.repeat) {
 				this.keys.add(e.code);
@@ -61,8 +74,14 @@ var DesktopInput = class {
 		});
 		window.addEventListener(`keyup`, (e) => this.keys.delete(e.code));
 		window.addEventListener(`blur`, () => {
-			this.keys.clear();
-			this.mouse.down = false;
+			this.releaseControls();
+		});
+		document.addEventListener(`focusin`, (e) => {
+			if (isFlightUiTarget(e.target)) this.releaseControls();
+		});
+		e.addEventListener(`pointerdown`, () => {
+			if (isFlightUiTarget(document.activeElement))
+				document.activeElement.blur();
 		});
 		window.addEventListener(`mousemove`, (e) => {
 			this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -84,6 +103,13 @@ var DesktopInput = class {
 			this.lastInput = e;
 			this.onInputKind?.(e);
 		}
+	}
+	releaseControls() {
+		this.keys.clear();
+		this.pressed.clear();
+		this.padPressed.clear();
+		this.mouse.down = false;
+		this.axes.pitch = this.axes.roll = this.axes.yaw = 0;
 	}
 	wasPressed(e) {
 		return this.pressed.has(e);
@@ -216,7 +242,12 @@ var DesktopInput = class {
 			p.throttle = Math.max(0, Math.min(1, this.throttle));
 		}
 		this.manual = s !== 0 || c !== 0 || l !== 0;
-		if (this.mouseStick && !this.manual) {
+		if (
+			this.mouseStick &&
+			!this.manual &&
+			!this.uiHovered &&
+			!isFlightUiTarget(document.activeElement)
+		) {
 			let e = (e) =>
 				Math.abs(e) < 0.05
 					? 0
@@ -351,9 +382,10 @@ var PwaManager = class {
 		this.onChange?.();
 	}
 };
+
 export {
 	DesktopInput,
+	IOS_INSTALL_TIP_STORAGE_KEY,
 	PwaManager,
 	THROTTLE_CHANGE_RATE,
-	IOS_INSTALL_TIP_STORAGE_KEY,
 };
