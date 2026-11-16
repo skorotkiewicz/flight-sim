@@ -124,5 +124,4 @@ if (missing.length) console.log(`NOT exported by vendor three.js: ${missing.join
 const shim = `// re-export of the real three.js; names referenced by the game modules\nexport {\n${[...fromThree].sort().map((n) => `  ${n},`).join("\n")}\n} from "three";\n`;
 fs.writeFileSync(path.join(outDir, "three.js"), shim);
 console.log(`three.js shim (${fromThree.size} names, ${missing.length} missing)`);
-fs.writeFileSync(path.join(outDir, "rename-map.json"), JSON.stringify(map, null, 2));
 console.log(`done: ${modules.length - 1} modules + shim -> ${outDir}`);

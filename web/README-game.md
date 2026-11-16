@@ -54,11 +54,11 @@ shadowed single-letter locals are safe).
 | sw.js | service-worker URL helpers |
 | loader.js | loadModule (dynamic import + progress) |
 | main.js | Game class + bootstrap (`window.baron` hook is in Game.setupDebug) |
-| lil-gui.esm-BzjtZe8o.js | debug GUI, restored from npm (the hashed chunk was not in the build output) |
+| lil-gui | debug GUI for `Game.setupDebug`, npm dependency, loaded via dynamic import (own chunk) |
 
 ## Variable-name map
 
-`rename-map.json` (also copied into `src/`): `{ "<minified>": "<recovered>" }`.
+`rename-map.json` (repo root): `{ "map": { "<minified>": "<recovered>" } }`.
 To extend it, add entries and re-run the command above — renaming is
 babel-scope-aware, so shadowed locals are untouched, and cross-module imports
 are re-wired automatically.
